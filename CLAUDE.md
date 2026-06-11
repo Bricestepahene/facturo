@@ -1,469 +1,617 @@
 # Facturo — Claude Code Instructions
 
-## Project Overview
-
-Facturo is a cross-platform mobile invoicing application built with Expo (React Native) and TypeScript. It targets freelancers, SMEs, and entrepreneurs worldwide — not limited to any specific region or currency. The goal is to ship a clean, monetized app on Google Play Store.
-
-**Working directory**: project root  
-**Primary language**: TypeScript (strict mode)  
-**Platform**: Android (Play Store), iOS future  
-**Build tool**: EAS Build via Expo
+> **Ce fichier est la bible du projet. Lire intégralement avant toute modification.**
 
 ---
 
-## Vision & Positioning
+## Vision & Objectifs
 
-- **Global**: Any currency, any language, any country. Never hard-code region-specific logic.
-- **Offline-first**: All data lives on device (AsyncStorage via Zustand persist). No backend required.
-- **Ad-gate monetization**: Users are NEVER blocked. They always have a path to continue (30-sec ad). Paying removes ads.
-- **Professional quality**: PDFs must look indistinguishable from Word/Excel-generated invoices.
+**Facturo** est une application mobile de facturation professionnelle, mondiale, hors-ligne.
+
+**Cible :** Freelances, consultants, TPE/PME — partout dans le monde.  
+**Différenciation :** Aucun compte requis, fonctionne 100% hors-ligne, PDFs professionnels, jamais de blocage.  
+**Objectif de lancement :** 3 000 utilisateurs actifs dans le premier mois post-publication Play Store.
+
+**Levier de croissance principal :** Chaque PDF partagé est un vecteur d'acquisition. Le pied de page des PDFs gratuits inclut "Créé avec Facturo" — chaque facture envoyée via WhatsApp/Gmail est une publicité gratuite.
 
 ---
 
-## Tech Stack
+## Stack Technique
 
 ```
-Framework:   Expo SDK 51+ (React Native)
-Language:    TypeScript (strict: true)
-State:       Zustand + @react-native-async-storage/async-storage
-Navigation:  React Navigation v6 (Bottom tabs + Stack)
-Forms:       react-hook-form + Zod
-PDF:         expo-print + expo-sharing
-i18n:        i18next + react-i18next + expo-localization
-Ads:         react-native-google-mobile-ads (AdMob rewarded + banner)
-IAP:         expo-in-app-purchases
-Build:       EAS Build (eas.json)
-CI/CD:       GitHub Actions → EAS
-Lint/Format: ESLint + Prettier
+Framework :      Expo SDK 51+ (React Native), TypeScript strict
+Base de données: expo-sqlite + drizzle-orm (SQLite local, sur l'appareil)
+Migrations DB :  drizzle-kit (fichiers de migration versionnés)
+État UI :        Zustand (état temporaire UI uniquement — pas de persistance)
+Navigation :     React Navigation v6 (Bottom Tabs + Stack + Modal)
+Formulaires :    react-hook-form + Zod
+PDF :            @react-pdf/renderer (rendu JS pur, qualité professionnelle)
+i18n :           i18next + react-i18next + expo-localization
+Partage PDF :    expo-sharing + expo-file-system
+Publicités :     react-native-google-mobile-ads (AdMob)
+Achats :         expo-in-app-purchases (Google Play Billing)
+Notifications :  expo-notifications
+Build :          EAS Build (Expo Application Services)
+CI/CD :          GitHub Actions → EAS
+Lint/Format :    ESLint + Prettier
+Tests :          Jest + @testing-library/react-native
 ```
 
 ---
 
-## Project Structure
+## Architecture — Vue d'ensemble
+
+```
+┌─────────────────────────────────────────┐
+│              SCREENS (UI)               │
+│    react-hook-form + Zod validation     │
+├─────────────────────────────────────────┤
+│           ZUSTAND STORES (UI)           │
+│   État temporaire : filtres, sélection  │
+│   Pas de persistance dans Zustand       │
+├─────────────────────────────────────────┤
+│         REPOSITORIES (Services)         │
+│  ClientRepository, DocumentRepository  │
+│  Couche d'abstraction entre UI et DB    │
+├─────────────────────────────────────────┤
+│      DRIZZLE ORM (Requêtes SQL)         │
+│   Type-safe, migrations versionnées     │
+├─────────────────────────────────────────┤
+│        SQLITE (expo-sqlite)             │
+│   Base de données locale sur l'appareil │
+│   Données persistantes, jamais perdues  │
+└─────────────────────────────────────────┘
+```
+
+**Règle fondamentale :** Toute donnée métier passe par SQLite via les Repositories.  
+Zustand ne gère que l'état de navigation et les filtres temporaires d'écran.
+
+---
+
+## Structure du Projet
 
 ```
 facturo/
 ├── src/
-│   ├── components/
-│   │   ├── common/          # Button, Input, Card, Modal, Badge, etc.
-│   │   ├── forms/           # LineItemRow, ClientPicker, TaxSelector, etc.
-│   │   └── pdf/             # PDF HTML template builders
-│   ├── screens/
-│   │   ├── dashboard/       # DashboardScreen
-│   │   ├── documents/       # DocumentListScreen, DocumentEditorScreen
-│   │   ├── preview/         # PDFPreviewScreen
-│   │   ├── clients/         # ClientListScreen, ClientFormScreen
-│   │   ├── products/        # ProductListScreen, ProductFormScreen
-│   │   ├── settings/        # SettingsScreen, CompanyProfileScreen
-│   │   ├── onboarding/      # OnboardingScreen
-│   │   └── upgrade/         # UpgradeProScreen
-│   ├── store/
-│   │   ├── clientsStore.ts
-│   │   ├── documentsStore.ts
-│   │   ├── productsStore.ts
-│   │   ├── settingsStore.ts
-│   │   └── usageStore.ts    # PDF counter, ad-gate state
-│   ├── types/
-│   │   ├── document.types.ts
-│   │   ├── client.types.ts
-│   │   ├── product.types.ts
-│   │   ├── settings.types.ts
-│   │   └── currency.types.ts
+│   ├── db/
+│   │   ├── schema.ts           # Schéma Drizzle (tables + types inférés)
+│   │   ├── migrations/         # Fichiers SQL générés par drizzle-kit
+│   │   ├── client.ts           # Initialisation de la connexion SQLite
+│   │   └── seed.ts             # Données de démo pour le premier lancement
+│   │
+│   ├── repositories/           # Couche d'accès aux données
+│   │   ├── ClientRepository.ts
+│   │   ├── ProductRepository.ts
+│   │   ├── DocumentRepository.ts
+│   │   ├── TaxRateRepository.ts
+│   │   └── SettingsRepository.ts
+│   │
 │   ├── services/
 │   │   ├── pdf/
-│   │   │   ├── pdfGenerator.ts     # HTML → PDF via expo-print
-│   │   │   ├── pdfTemplate.ts      # HTML template builder
-│   │   │   └── pdfSharing.ts       # Share/download/print
+│   │   │   ├── PdfTemplate.tsx     # Composants @react-pdf/renderer
+│   │   │   ├── PdfGenerator.ts     # generatePdf(document, company) → URI
+│   │   │   └── PdfSharing.ts       # share / download / print
 │   │   ├── monetization/
-│   │   │   ├── adGate.ts           # Ad-gate logic + rewarded ad trigger
-│   │   │   └── iap.ts              # In-app purchase + restore
-│   │   └── storage/
-│   │       └── backupRestore.ts    # JSON export/import
+│   │   │   ├── AdService.ts        # AdMob rewarded + banner
+│   │   │   ├── IapService.ts       # In-app purchases
+│   │   │   └── AdGate.ts           # Logique ad-gate (jamais de blocage)
+│   │   └── backup/
+│   │       └── BackupService.ts    # Export/import JSON
+│   │
+│   ├── stores/                 # Zustand — état UI uniquement
+│   │   ├── documentUiStore.ts  # Filtres, tri, onglet actif
+│   │   ├── usageStore.ts       # Compteur PDF/mois + isPro
+│   │   └── onboardingStore.ts  # hasSeenOnboarding
+│   │
+│   ├── screens/
+│   │   ├── dashboard/          DashboardScreen.tsx
+│   │   ├── documents/          DocumentListScreen.tsx, DocumentEditorScreen.tsx
+│   │   ├── preview/            PdfPreviewScreen.tsx
+│   │   ├── clients/            ClientListScreen.tsx, ClientFormScreen.tsx
+│   │   ├── products/           ProductListScreen.tsx, ProductFormScreen.tsx
+│   │   ├── settings/           SettingsScreen.tsx, CompanyProfileScreen.tsx
+│   │   │                       TaxRatesScreen.tsx, BackupScreen.tsx
+│   │   ├── onboarding/         OnboardingScreen.tsx
+│   │   └── upgrade/            UpgradeProScreen.tsx
+│   │
+│   ├── components/
+│   │   ├── common/             Button, Input, Card, Badge, Modal, EmptyState...
+│   │   ├── forms/              LineItemRow, ClientPicker, TaxSelector...
+│   │   └── ads/                AdBanner.tsx
+│   │
 │   ├── utils/
-│   │   ├── currency.ts      # Currency formatting, supported list
-│   │   ├── calculations.ts  # Subtotal, tax, discount, total
-│   │   ├── invoiceNumber.ts # Auto-increment with prefix
+│   │   ├── calculations.ts     # Calculs financiers purs (testés)
+│   │   ├── currency.ts         # Formatage + liste 150+ devises ISO 4217
+│   │   ├── documentNumber.ts   # Génération numéros FAC/DEV
 │   │   └── dateUtils.ts
+│   │
 │   ├── i18n/
 │   │   ├── en.json
 │   │   ├── fr.json
 │   │   └── index.ts
+│   │
 │   ├── theme/
 │   │   ├── colors.ts
 │   │   ├── typography.ts
 │   │   └── spacing.ts
+│   │
 │   └── navigation/
 │       └── AppNavigator.tsx
-├── assets/
+│
+├── drizzle.config.ts           # Config drizzle-kit
+├── app.config.js               # Config Expo dynamique (env vars)
+├── eas.json
 ├── docs/
 │   ├── DEVELOPMENT_PLAN.md
 │   └── ARCHITECTURE.md
-├── .github/
-│   └── workflows/
-│       └── eas-build.yml
-├── app.json
-├── eas.json
-├── CLAUDE.md
-└── README.md
+└── .github/workflows/eas-build.yml
 ```
 
 ---
 
-## Core Data Models
-
-### Document (Invoice / Quote)
+## Schéma de Base de Données (Drizzle)
 
 ```typescript
-// src/types/document.types.ts
+// src/db/schema.ts
 
-type DocumentType = 'quote' | 'invoice';
-type DocumentStatus =
-  | 'draft'
-  | 'sent'
-  | 'paid'
-  | 'overdue'
-  | 'cancelled'
-  | 'converted'; // quote was converted to invoice
+import { sqliteTable, text, real, integer } from 'drizzle-orm/sqlite-core';
 
-interface Document {
-  id: string;
-  type: DocumentType;
-  status: DocumentStatus;
-  number: string;            // e.g. "FAC-2026-001"
-  date: string;              // ISO date
-  dueDate?: string;
-  language: 'fr' | 'en';    // PDF output language
-  currency: CurrencyConfig;
+export const clients = sqliteTable('clients', {
+  id:                   text('id').primaryKey(),
+  type:                 text('type', { enum: ['individual', 'company'] }).notNull(),
+  name:                 text('name').notNull(),
+  email:                text('email'),
+  phone:                text('phone'),
+  addressLine1:         text('address_line1'),
+  addressLine2:         text('address_line2'),
+  city:                 text('city'),
+  state:                text('state'),
+  postalCode:           text('postal_code'),
+  countryCode:          text('country_code').notNull().default('FR'),
+  taxId:                text('tax_id'),
+  registrationNumber:   text('registration_number'),
+  defaultCurrencyCode:  text('default_currency_code'),
+  notes:                text('notes'),
+  createdAt:            text('created_at').notNull(),
+  updatedAt:            text('updated_at').notNull(),
+});
 
-  clientId: string;
-  clientSnapshot: ClientSnapshot; // copy at time of creation
+export const products = sqliteTable('products', {
+  id:          text('id').primaryKey(),
+  name:        text('name').notNull(),
+  description: text('description'),
+  unitPrice:   real('unit_price').notNull().default(0),
+  unit:        text('unit').notNull().default('pcs'),
+  category:    text('category'),
+  createdAt:   text('created_at').notNull(),
+  updatedAt:   text('updated_at').notNull(),
+});
 
-  items: LineItem[];
-  globalDiscount?: Discount;
-  taxes: TaxLine[];
+export const taxRates = sqliteTable('tax_rates', {
+  id:         text('id').primaryKey(),
+  name:       text('name').notNull(),
+  rate:       real('rate').notNull(),
+  isDefault:  integer('is_default', { mode: 'boolean' }).notNull().default(false),
+  isCompound: integer('is_compound', { mode: 'boolean' }).notNull().default(false),
+  createdAt:  text('created_at').notNull(),
+});
 
-  subtotal: number;          // sum of item totals before discount/tax
-  discountAmount: number;    // global discount amount
-  taxableAmount: number;     // subtotal - discountAmount
-  taxTotal: number;          // sum of all tax lines
-  total: number;             // taxableAmount + taxTotal
+export const documents = sqliteTable('documents', {
+  id:     text('id').primaryKey(),
+  type:   text('type', { enum: ['quote', 'invoice'] }).notNull(),
+  status: text('status', {
+    enum: ['draft', 'sent', 'paid', 'overdue', 'cancelled', 'converted']
+  }).notNull().default('draft'),
 
-  notes?: string;
-  terms?: string;
+  number:   text('number').notNull(),
+  date:     text('date').notNull(),
+  dueDate:  text('due_date'),
+  language: text('language', { enum: ['fr', 'en'] }).notNull().default('fr'),
 
-  convertedFromId?: string;  // if this invoice was created from a quote
-  convertedToId?: string;    // if this quote was converted (links to invoice)
+  // Devise — snapshot complet pour que le PDF reste exact même si l'utilisateur
+  // change de devise par défaut plus tard
+  currencyCode:           text('currency_code').notNull(),
+  currencySymbol:         text('currency_symbol').notNull(),
+  currencySymbolPosition: text('currency_symbol_position').notNull().default('before'),
+  currencyDecimalDigits:  integer('currency_decimal_digits').notNull().default(2),
+  currencyThousandsSep:   text('currency_thousands_sep').notNull().default(','),
+  currencyDecimalSep:     text('currency_decimal_sep').notNull().default('.'),
 
-  isPro?: boolean;           // generated without ad by Pro user
-  createdAt: string;
-  updatedAt: string;
-}
+  // Client — snapshot JSON pour que la facture reste valide même si le client
+  // est modifié ou supprimé ultérieurement
+  clientId:       text('client_id').references(() => clients.id, { onDelete: 'set null' }),
+  clientSnapshot: text('client_snapshot').notNull(), // JSON stringify(Client)
 
-interface LineItem {
-  id: string;
-  productId?: string;
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  unit: string;              // 'h', 'kg', 'pcs', 'day', 'forfait', etc.
-  discount?: Discount;
-  appliedTaxRateIds: string[];
+  // Remise globale
+  globalDiscountType:  text('global_discount_type', { enum: ['percentage', 'fixed'] }),
+  globalDiscountValue: real('global_discount_value'),
 
-  // Computed
-  subtotal: number;          // quantity * unitPrice
-  discountAmount: number;
-  taxableAmount: number;     // subtotal - discountAmount
-  taxAmount: number;
-  total: number;
-}
+  // Totaux calculés et stockés (jamais recalculés à la volée — source de vérité)
+  subtotal:      real('subtotal').notNull().default(0),
+  discountAmount:real('discount_amount').notNull().default(0),
+  taxableAmount: real('taxable_amount').notNull().default(0),
+  taxTotal:      real('tax_total').notNull().default(0),
+  total:         real('total').notNull().default(0),
 
-interface Discount {
-  type: 'percentage' | 'fixed';
-  value: number;
-}
+  notes: text('notes'),
+  terms: text('terms'),
 
-interface TaxLine {
-  taxRateId: string;
-  name: string;              // e.g. "TVA 20%"
-  rate: number;              // 20
-  base: number;              // taxable amount this tax applies to
-  amount: number;
-}
+  // Liens de conversion
+  convertedFromId: text('converted_from_id').references((): any => documents.id),
+  convertedToId:   text('converted_to_id').references((): any => documents.id),
+
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+export const documentItems = sqliteTable('document_items', {
+  id:         text('id').primaryKey(),
+  documentId: text('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  position:   integer('position').notNull(),
+  productId:  text('product_id'),
+
+  description: text('description').notNull(),
+  quantity:    real('quantity').notNull().default(1),
+  unitPrice:   real('unit_price').notNull().default(0),
+  unit:        text('unit').notNull().default('pcs'),
+
+  discountType:  text('discount_type', { enum: ['percentage', 'fixed'] }),
+  discountValue: real('discount_value'),
+
+  // JSON array des IDs de taux de TVA appliqués à cette ligne
+  appliedTaxRateIds: text('applied_tax_rate_ids').notNull().default('[]'),
+
+  // Totaux par ligne
+  subtotal:      real('subtotal').notNull().default(0),
+  discountAmount:real('discount_amount').notNull().default(0),
+  taxableAmount: real('taxable_amount').notNull().default(0),
+  taxAmount:     real('tax_amount').notNull().default(0),
+  total:         real('total').notNull().default(0),
+});
+
+export const companySettings = sqliteTable('company_settings', {
+  id:                    text('id').primaryKey().default('singleton'),
+  name:                  text('name').notNull().default(''),
+  logoUri:               text('logo_uri'),
+  addressLine1:          text('address_line1'),
+  addressLine2:          text('address_line2'),
+  city:                  text('city'),
+  state:                 text('state'),
+  postalCode:            text('postal_code'),
+  countryCode:           text('country_code').default('FR'),
+  phone:                 text('phone'),
+  email:                 text('email'),
+  website:               text('website'),
+  taxId:                 text('tax_id'),
+  registrationNumber:    text('registration_number'),
+  defaultCurrencyCode:   text('default_currency_code').notNull().default('EUR'),
+  defaultLanguage:       text('default_language').notNull().default('fr'),
+  invoicePrefix:         text('invoice_prefix').notNull().default('FAC'),
+  invoiceCounter:        integer('invoice_counter').notNull().default(0),
+  quotePrefix:           text('quote_prefix').notNull().default('DEV'),
+  quoteCounter:          integer('quote_counter').notNull().default(0),
+  defaultPaymentTermsDays: integer('default_payment_terms_days').notNull().default(30),
+  legalMentions:         text('legal_mentions'),
+  bankDetails:           text('bank_details'),
+});
+
+export const appUsage = sqliteTable('app_usage', {
+  id:               text('id').primaryKey().default('singleton'),
+  pdfCountThisMonth:integer('pdf_count_this_month').notNull().default(0),
+  lastResetMonth:   text('last_reset_month').notNull().default(''), // 'YYYY-MM'
+  isPro:            integer('is_pro', { mode: 'boolean' }).notNull().default(false),
+  hasSeenOnboarding:integer('has_seen_onboarding', { mode: 'boolean' }).notNull().default(false),
+  proReceiptToken:  text('pro_receipt_token'), // Google Play receipt pour vérification
+});
 ```
 
-### Currency
+---
+
+## Pattern Repository
+
+Chaque repository encapsule toutes les requêtes SQLite pour un domaine.  
+Les screens n'appellent jamais Drizzle directement — toujours via un repository.
 
 ```typescript
-// src/types/currency.types.ts
+// src/repositories/DocumentRepository.ts (exemple)
 
-interface CurrencyConfig {
-  code: string;              // ISO 4217: EUR, USD, XAF, GBP...
-  symbol: string;            // €, $, FCFA, £
-  symbolPosition: 'before' | 'after';
-  decimalDigits: number;     // 2 for EUR/USD, 0 for XAF/XOF
-  thousandsSep: string;      // ' ', ',', '.'
-  decimalSep: string;        // '.', ','
+export class DocumentRepository {
+  async findAll(filters?: DocumentFilters): Promise<Document[]>
+  async findById(id: string): Promise<Document | null>
+  async findWithItems(id: string): Promise<DocumentWithItems | null>
+  async create(data: CreateDocumentInput): Promise<Document>
+  async update(id: string, data: UpdateDocumentInput): Promise<Document>
+  async delete(id: string): Promise<void>
+  async convertQuoteToInvoice(quoteId: string): Promise<Document>
+  async duplicate(id: string): Promise<Document>
+  async getStats(): Promise<DocumentStats>
 }
-
-// Must support 150+ ISO currencies. Commonly used:
-// EUR, USD, GBP, CHF, CAD, AUD, JPY, CNY
-// XAF (FCFA), XOF (CFA), NGN, GHS, KES, ZAR, MAD, DZD, EGP
-// Format currency amounts using this config — never hard-code symbols
 ```
 
-### Tax Rate
+---
+
+## Génération PDF — @react-pdf/renderer
+
+Le PDF est rendu côté JavaScript pur — résultat identique sur tous les appareils Android.
 
 ```typescript
-interface TaxRate {
-  id: string;
-  name: string;    // user-defined: "TVA", "VAT", "AIR", "GST", "HST"
-  rate: number;    // 0-100
-  isDefault: boolean;
-  isCompound: boolean; // applied on top of other taxes
+// src/services/pdf/PdfTemplate.tsx
+import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer';
+
+export function InvoicePdf({ document, company, t }: PdfProps) {
+  return (
+    <Document>
+      <Page size="A4" style={styles.page}>
+        <Header company={company} document={document} />
+        <ClientBlock client={document.clientSnapshot} t={t} />
+        <ItemsTable items={document.items} currency={document.currency} t={t} />
+        <FinancialSummary document={document} t={t} />
+        <Footer company={company} document={document} isPro={isPro} t={t} />
+        {document.status === 'draft' && <DraftWatermark t={t} />}
+      </Page>
+    </Document>
+  );
 }
 ```
 
-### Client
+### Pied de page PDF — Levier de croissance
 
 ```typescript
-interface Client {
-  id: string;
-  type: 'individual' | 'company';
-  name: string;
-  email?: string;
-  phone?: string;
-  address?: Address;
-  countryCode: string;        // ISO 3166-1 alpha-2
-  taxId?: string;             // NIU, NIF, VAT number, etc.
-  registrationNumber?: string; // RCCM, SIRET, etc.
-  defaultCurrencyCode?: string;
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface Address {
-  line1?: string;
-  line2?: string;
-  city?: string;
-  state?: string;
-  postalCode?: string;
-  country?: string;
+// Version GRATUITE
+function Footer({ isPro, ... }) {
+  return (
+    <View style={styles.footer}>
+      <Text>{company.legalMentions}</Text>
+      <Text>{company.bankDetails}</Text>
+      {!isPro && (
+        <Text style={styles.brandingFooter}>
+          Créé avec Facturo — facturo.app
+        </Text>
+      )}
+    </View>
+  );
 }
 ```
 
-### Company Settings
+**Ce pied de page est le principal moteur de croissance.** Chaque PDF partagé est une publicité gratuite. Retirer ce branding est l'un des avantages Pro les plus convaincants.
+
+---
+
+## Modèles Métier (Types TypeScript)
+
+Les types sont **inférés automatiquement depuis le schéma Drizzle** avec `InferSelectModel` et `InferInsertModel`. Ne pas les redéfinir manuellement.
 
 ```typescript
-interface CompanySettings {
-  name: string;
-  logoUri?: string;
-  address?: Address;
-  phone?: string;
-  email?: string;
-  website?: string;
-  taxId?: string;
-  registrationNumber?: string;
+import { InferSelectModel, InferInsertModel } from 'drizzle-orm';
+import * as schema from '@/db/schema';
 
-  defaultCurrencyCode: string;
-  defaultTaxRates: TaxRate[];
+export type Client         = InferSelectModel<typeof schema.clients>;
+export type NewClient      = InferInsertModel<typeof schema.clients>;
+export type Product        = InferSelectModel<typeof schema.products>;
+export type Document       = InferSelectModel<typeof schema.documents>;
+export type DocumentItem   = InferSelectModel<typeof schema.documentItems>;
+export type TaxRate        = InferSelectModel<typeof schema.taxRates>;
+export type CompanySettings= InferSelectModel<typeof schema.companySettings>;
+```
 
-  invoicePrefix: string;      // e.g. "FAC"
-  invoiceCounter: number;
-  quotePrefix: string;        // e.g. "DEV"
-  quoteCounter: number;
-
-  defaultPaymentTermsDays: number; // 30
-  defaultLanguage: 'fr' | 'en';
-  legalMentions?: string;
-  bankDetails?: string;
-}
+Types composites (non stockés, calculés) :
+```typescript
+export type DocumentWithItems = Document & { items: DocumentItem[] };
+export type CurrencyConfig = {
+  code: string; symbol: string; symbolPosition: 'before' | 'after';
+  decimalDigits: number; thousandsSep: string; decimalSep: string;
+};
 ```
 
 ---
 
-## Business Rules
+## Règles de Calcul Financier
 
-### Invoice Numbering
-- Format: `{PREFIX}-{YEAR}-{COUNTER:03d}` → `FAC-2026-001`
-- Counter auto-increments in settings store, never resets mid-year
-- Prefix and counter are configurable in settings
-- Quotes and invoices have separate sequences
-
-### Quote → Invoice Conversion
-1. Duplicate all document data (client snapshot, items, taxes, currency)
-2. Set new document type to `'invoice'`
-3. Reset: new number, today's date, due date = today + defaultPaymentTermsDays
-4. Set status to `'draft'`
-5. Set `convertedFromId` on the new invoice
-6. Set `convertedToId` on the original quote + change quote status to `'converted'`
-7. User reviews and confirms before saving
-
-### Financial Calculations (EXACT — no rounding errors)
-```
-itemSubtotal    = quantity × unitPrice
-itemDiscount    = if type='percentage': itemSubtotal × (value/100), else: value
-itemTaxable     = itemSubtotal - itemDiscount
-itemTax         = sum(taxRate.rate/100 × itemTaxable) for each applied tax
-itemTotal       = itemTaxable + itemTax
-
-docSubtotal     = sum(item.itemSubtotal)
-docDiscount     = if type='percentage': docSubtotal × (value/100), else: value
-docTaxable      = docSubtotal - docDiscount
-taxLines        = group by taxRateId, sum bases and amounts
-docTaxTotal     = sum(taxLine.amount)
-docTotal        = docTaxable + docTaxTotal
-```
-- Always work in the document currency (no conversion)
-- Round only for display, not for intermediate calculations
-- Use `toFixed(currency.decimalDigits)` for display
-
-### Monetization — Ad-Gate Model
-```
-RULE: A user is NEVER blocked from their work.
-
-Free tier:
-  - pdfCountThisMonth < FREE_LIMIT (10) → generate PDF directly
-  - pdfCountThisMonth >= FREE_LIMIT    → show AdGateModal
-    ├── Watch 30-sec rewarded ad → ad completes → generate PDF
-    └── Upgrade to Pro button → UpgradeProScreen
-
-Pro tier:
-  - isPro = true → generate PDF directly, no ad, no counter
-
-Usage counter:
-  - Incremented in usageStore on successful PDF generation
-  - Reset on first day of each month (checked on app launch)
-  - Persisted in AsyncStorage
-
-Never:
-  - Never disable Save/Edit because of free tier
-  - Never hide features because of free tier
-  - Never show the ad modal on non-PDF actions
-```
-
-### Multi-Currency
-- Currency is set per document (not per client or global)
-- Default currency comes from CompanySettings
-- All 150+ ISO 4217 currencies must be selectable
-- Currency formatting uses `CurrencyConfig` — never hard-code symbols
-- No real-time exchange rates in v1 (prices are entered in the document's currency)
-
-### Multi-Language
-- App UI: i18next, follows device locale (fallback: English)
-- PDF output: `document.language` field ('fr' or 'en'), independent of app language
-- All user-facing strings must be in translation files — no hard-coded strings
-- Translation keys: snake_case, grouped by screen
-
----
-
-## Screens & Navigation
+**Règle absolue : arrondir uniquement à l'affichage. Jamais dans les calculs intermédiaires.**
 
 ```
-Tab Navigator (bottom tabs):
-├── Dashboard          (DashboardScreen)
-├── Documents          (DocumentListScreen)
-│   └── [Stack] DocumentEditorScreen
-│       └── [Modal] PDFPreviewScreen
-├── Clients            (ClientListScreen)
-│   └── [Stack] ClientFormScreen
-├── Products           (ProductListScreen)
-│   └── [Stack] ProductFormScreen
-└── Settings           (SettingsScreen)
-    ├── CompanyProfileScreen
-    ├── TaxRatesScreen
-    ├── UpgradeProScreen
-    └── BackupRestoreScreen
+Par ligne :
+  itemSubtotal    = quantity × unitPrice
+  itemDiscount    = (type='%') ? itemSubtotal × (val/100) : val
+  itemTaxable     = itemSubtotal - itemDiscount
+  itemTaxAmount   = Σ(rate/100 × itemTaxable) pour chaque taux appliqué
+  itemTotal       = itemTaxable + itemTaxAmount
 
-Modal:
-├── OnboardingScreen   (first launch only)
-└── AdGateModal        (before PDF when limit reached)
+Document :
+  docSubtotal     = Σ(item.itemSubtotal)
+  docDiscount     = (type='%') ? docSubtotal × (val/100) : val
+  docTaxable      = docSubtotal - docDiscount
+  taxLines        = regrouper items par taxRateId, sommer bases et montants
+  docTaxTotal     = Σ(taxLine.amount)
+  docTotal        = docTaxable + docTaxTotal
+```
+
+Les totaux sont calculés puis **stockés en base** à chaque sauvegarde. Un document ne recalcule jamais ses totaux après génération du PDF — le montant visible dans la liste est exact même si les taux changent plus tard.
+
+---
+
+## Règles Métier — Conversion Devis → Facture
+
+1. Confirmation utilisateur obligatoire (modal)
+2. Créer une nouvelle ligne `documents` :
+   - Copier : `clientId`, `clientSnapshot`, `currency*`, `globalDiscount*`, `notes`, `terms`
+   - Changer : `type='invoice'`, `status='draft'`, nouveau `number`, `date=today`, `dueDate=today+terms`
+   - Ajouter : `convertedFromId = quote.id`
+3. Copier toutes les lignes `document_items` avec le nouveau `documentId`
+4. Mettre à jour le devis original : `status='converted'`, `convertedToId = newInvoice.id`
+5. **Tout ceci dans une transaction SQLite** — si une étape échoue, rien n'est modifié
+6. Naviguer vers la nouvelle facture en mode édition
+
+**Ce que l'on ne fait PAS :**
+- Supprimer le devis original
+- Recalculer les prix
+- Modifier les taux de TVA
+
+---
+
+## Monétisation — Modèle Ad-Gate (Jamais de Blocage)
+
+```
+FREE_PDF_LIMIT = 10 PDFs/mois
+
+canGeneratePdfDirectly():
+  → isPro = true           → OUI, générer directement
+  → pdfCount < LIMIT       → OUI, générer directement
+  → pdfCount >= LIMIT      → NON, afficher AdGateModal
+
+AdGateModal:
+  ┌─ "X/10 PDFs utilisés ce mois"
+  ├─ [Regarder une pub — 30 sec] → showRewardedAd() → générer
+  └─ [Passer à Pro]              → UpgradeProScreen
+
+Si pub non disponible (hors ligne / erreur réseau) :
+  → Bypass automatique → générer quand même
+  → Ne jamais bloquer l'utilisateur
+
+Reset mensuel :
+  → À chaque lancement : vérifier si mois courant ≠ lastResetMonth
+  → Si oui : pdfCountThisMonth = 0, lastResetMonth = 'YYYY-MM' courant
+```
+
+**Ce que l'on NE fait JAMAIS :**
+- Désactiver le bouton Enregistrer
+- Griser des fonctionnalités
+- Empêcher la création ou l'édition de documents
+- Bloquer si la pub ne charge pas
+
+---
+
+## Multi-devises (150+ ISO 4217)
+
+- Devise définie **par document** (pas par client, pas globalement)
+- La devise par défaut vient de `companySettings.defaultCurrencyCode`
+- Le snapshot complet de la devise est stocké dans `documents` — le PDF reste exact même si les préférences changent
+- Aucune conversion automatique en v1
+- Formatage via `formatCurrency(amount, currencyConfig)` — jamais de symbole en dur
+
+Devises prioritaires : EUR, USD, GBP, CHF, CAD, AUD, JPY, XAF, XOF, NGN, GHS, KES, ZAR, MAD, DZD, TND, EGP + toutes les autres ISO 4217.
+
+---
+
+## Internationalisation
+
+- App UI : i18next, suit la locale de l'appareil (fallback : EN)
+- PDF output : `document.language` ('fr' ou 'en'), **indépendant** de la langue de l'app
+- Zéro chaîne en dur dans les composants — toujours `t('namespace:key')`
+- Namespaces : `common`, `document`, `client`, `product`, `settings`, `pdf`, `monetization`, `onboarding`
+
+---
+
+## Stratégie 3 000 Utilisateurs (J+30 post-lancement)
+
+### Levier 1 — Viral loop (PDF footer) — Principal
+Chaque PDF partagé expose "Créé avec Facturo" à au moins un prospect.
+Si un utilisateur envoie 5 PDFs/mois avec 10% de conversion → 0.5 utilisateur acquis par utilisateur actif.
+Objectif : coefficient viral K > 0.4
+
+### Levier 2 — ASO Play Store
+- Titre : "Facturo – Factures & Devis PDF"
+- Description optimisée : facture, devis, invoice, PDF, freelance, entrepreneur, TVA
+- 8 captures d'écran haute qualité (French + English)
+- Vidéo de démonstration 30 secondes
+- Note cible : 4.5+ étoiles dès J+7 (demander un avis aux early users)
+
+### Levier 3 — Seeding communautaire (pré-lancement + lancement)
+- Groupes Facebook/WhatsApp : freelances, auto-entrepreneurs, comptables (Afrique + France)
+- LinkedIn : post de lancement avec GIF démonstration
+- Reddit : r/freelance, r/Entrepreneur, r/androidapps
+- Forums comptabilité OHADA
+
+### Levier 4 — Early Adopter Pro
+- 50 premiers acheteurs Pro à 50% de réduction ("Fondateur")
+- Incentive : badge "Fondateur" dans les releases notes
+
+### Levier 5 — Bouton de partage intégré
+- Dashboard : "Inviter un collègue" → deep link Play Store
+- Après génération PDF : "Cet ami envoie des factures professionnelles avec Facturo"
+
+### Métriques à suivre
+- Téléchargements / jour
+- Taux d'activation (>= 1 PDF généré)
+- Taux conversion Free → Pro
+- Coefficient viral (nouveaux users via footer)
+
+---
+
+## Conventions de Code
+
+### TypeScript
+- `strict: true` dans tsconfig — aucun `any`
+- Types inférés depuis Drizzle — ne pas dupliquer les interfaces
+- Pas de `as` sauf cas impossible autrement, commenté
+
+### Composants React Native
+- Fonctionnels uniquement, pas de classes
+- Props : `interface Props {}` (pas de `type`)
+- Suffixe `Screen` pour les écrans, pas de suffixe pour les composants partagés
+- Styles : `StyleSheet.create` uniquement, jamais d'objet inline
+- Pas de `useCallback`/`useMemo` par défaut — uniquement si profiling justifie
+
+### Repositories
+- Chaque méthode est `async`
+- Toutes les erreurs remontent sans être avalées
+- Transactions SQLite pour toute opération multi-tables
+
+### Commits
+```
+feat(screen):  add client form with Zod validation [#9]
+fix(pdf):      correct tax rounding in multi-rate case [#33]
+chore(db):     add migration 0003_add_discount_column
 ```
 
 ---
 
-## Component Conventions
+## Règles Absolues (Ne Jamais Violer)
 
-- Functional components only, no class components
-- Props typed with `interface`, not `type` alias
-- Screens suffix: `Screen` (e.g. `DashboardScreen`)
-- Shared components: PascalCase, in `src/components/common/`
-- No inline styles — use `StyleSheet.create` or theme tokens
-- No `any` type — use proper types or `unknown`
-- `useCallback` / `useMemo` only when measurably needed
-
----
-
-## State (Zustand) Conventions
-
-- One store per domain: clients, documents, products, settings, usage
-- Persist all stores with `zustand/middleware` → AsyncStorage
-- Store shape: `{ items: T[], actions: { ... } }`
-- Actions are methods inside the store, not external functions
-- Never mutate state directly — use `set(state => ...)` pattern
+1. **Jamais bloquer l'utilisateur** — le modèle ad-gate est toujours contournable (pub ou upgrade)
+2. **Jamais de symbole de devise en dur** — utiliser `formatCurrency(amount, config)`
+3. **Jamais de chaîne UI en dur** — utiliser i18n
+4. **Jamais appeler Drizzle directement depuis un Screen** — passer par un Repository
+5. **Jamais de `any`** en TypeScript
+6. **Jamais recalculer un document après génération PDF** — les totaux sont figés dans la DB
+7. **Toujours utiliser une transaction SQLite** pour la conversion devis→facture
+8. **Le schéma Drizzle est la source de vérité** des types — ne pas créer d'interfaces redondantes
+9. **Le pied de page Facturo reste sur les PDFs gratuits** — c'est le levier de croissance, ne pas le retirer sans Pro
+10. **Zéro API externe en v1** — l'app fonctionne entièrement hors ligne
 
 ---
 
-## PDF Templates
+## Migrations de Base de Données
 
-- Generated via HTML string → `expo-print`
-- Template is a pure function: `(document, company) => string`
-- Must look professional: tables, proper spacing, logo placement
-- Currency formatting via `formatCurrency(amount, currencyConfig)`
-- i18n labels in PDF: driven by `document.language`, not app locale
-- Always test output on real device (PDF rendering differs by OS)
-- "BROUILLON" / "DRAFT" watermark when `status === 'draft'`
+```bash
+# Générer une migration après modification de schema.ts
+npx drizzle-kit generate
 
----
-
-## Absolute Rules
-
-1. **Never block a user** — monetization is always opt-in ad-watch or upgrade
-2. **Never hard-code currency symbols** — use `CurrencyConfig`
-3. **Never hard-code language strings** — use i18n keys
-4. **Never assume OHADA/CEMAC context** — app is global
-5. **No backend, no API calls** — fully offline (v1)
-6. **No `any` type** in TypeScript
-7. **Calculations must be exact** — no premature rounding
-8. **Quote→Invoice conversion must be reversible** (original quote preserved)
-
----
-
-## Git Conventions
-
-```
-Branch naming:  feat/issue-{N}-short-description
-                fix/issue-{N}-short-description
-Commit format:  feat(screen): add client list with search [#9]
-                fix(pdf): correct tax calculation rounding [#12]
-PR:             title = issue title, body references issue number
+# Appliquer les migrations (développement)
+npx drizzle-kit push
 ```
 
----
-
-## Testing Strategy
-
-- Unit tests: pure utils (calculations, currency formatting, invoice numbering)
-- Integration: store actions with AsyncStorage mock
-- E2E: not in v1 (manual QA checklist before release)
-- Test files: co-located `*.test.ts` next to source
+Les migrations sont appliquées automatiquement au lancement de l'app via `runMigrations()` dans `src/db/client.ts`. Les fichiers dans `src/db/migrations/` sont versionnés dans git — ne jamais les modifier manuellement.
 
 ---
 
-## Environment & Secrets
+## Variables d'Environnement (GitHub Secrets pour CI)
 
-Required in GitHub Secrets for CI/CD:
-- `EXPO_TOKEN` — EAS authentication
-- `ADMOB_APP_ID_ANDROID` — AdMob app ID
-- `IAP_PRODUCT_ID_ONETIME` — Google Play product ID for one-time Pro purchase
-- `IAP_PRODUCT_ID_MONTHLY` — Google Play product ID for monthly subscription
+```
+EXPO_TOKEN                — Authentication EAS
+ADMOB_APP_ID_ANDROID      — AdMob App ID (production)
+IAP_PRODUCT_ID_ONETIME    — Google Play product ID achat unique Pro
+IAP_PRODUCT_ID_MONTHLY    — Google Play product ID abonnement mensuel
+```
 
-Never commit these values — use `app.config.js` + `process.env`.
+En développement : utiliser les IDs de test AdMob officiels.  
+En production : injectés via `app.config.js` depuis `process.env`.
 
 ---
 
-## Development Plan
+## Plan de Développement
 
-Full day-by-day plan: [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)
+Voir [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) — 42 jours ouvrables, 9 phases.
 
-Total estimated duration: **40 working days** across 8 phases.
+Règle de travail : commencer par l'issue `priority:critical` la plus basse en numéro.  
+Chaque issue fermée = branch `feat/issue-N-titre` → PR → merge → fermer l'issue.

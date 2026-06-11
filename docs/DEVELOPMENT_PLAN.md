@@ -1,25 +1,24 @@
-# Facturo — Plan de Développement Jour par Jour
+# Facturo — Plan de Développement
 
-**Durée totale estimée : 40 jours ouvrables**  
-**Référence :** Issues GitHub #1–#30  
-**Architecte :** Claude Code (Anthropic)  
-**Dernière mise à jour :** 2026-06-11
+**Durée : 42 jours ouvrables | 9 phases | Objectif : Play Store + 3 000 users J+30**  
+**Architecte : Claude Code | Dernière révision : 2026-06-11 (v2 — SQLite + @react-pdf)**
 
 ---
 
-## Vue d'ensemble des phases
+## Résumé des phases
 
 | Phase | Titre | Jours | Issues |
 |---|---|---|---|
-| 1 | Setup & Infrastructure | J1–J3 | #1, #2, #3, #26 |
-| 2 | Couche données (Types + Store) | J4–J6 | #4, #5 |
-| 3 | CRUD — Clients, Produits, Paramètres | J7–J13 | #9, #10, #11 |
-| 4 | Éditeur de documents | J14–J18 | #7, #14 |
-| 5 | Liste, Dashboard, Onboarding | J19–J21 | #6, #8, #19 |
-| 6 | Moteur PDF | J22–J26 | #12, #13 |
-| 7 | Monétisation | J27–J31 | #15, #16, #17, #18 |
-| 8 | Fonctions avancées | J32–J35 | #24, #25, #29 |
-| 9 | Store & CI/CD | J36–J40 | #20, #21, #22, #23, #27, #28, #30 |
+| 1 | Setup & Infrastructure | J1–J3 | #1 #2 #3 #26 #31 |
+| 2 | Base de données SQLite | J4–J7 | #4 #35 #36 |
+| 3 | Utilitaires & Calculs | J8–J9 | #32 #33 |
+| 4 | CRUD — Clients, Produits, Paramètres | J10–J16 | #9 #10 #11 #34 |
+| 5 | Éditeur de Documents | J17–J21 | #7 #14 |
+| 6 | Liste, Dashboard, Onboarding | J22–J24 | #6 #8 #19 |
+| 7 | Moteur PDF | J25–J30 | #12 #13 #16 |
+| 8 | Monétisation complète | J31–J35 | #15 #17 #18 |
+| 9 | Fonctions avancées | J36–J38 | #24 #25 #29 |
+| 10 | Store, CI/CD, Lancement | J39–J42 | #20 #21 #22 #23 #27 #28 #30 |
 
 ---
 
@@ -27,649 +26,705 @@
 
 ### Jour 1 — Init Expo + TypeScript + Navigation [#1]
 
-**Objectif :** Projet fonctionnel qui se lance sur Android.
-
-Tâches :
-- `npx create-expo-app facturo --template expo-template-blank-typescript`
-- Configurer `tsconfig.json` (strict: true, paths aliases `@/`)
-- Installer React Navigation v6 : `@react-navigation/native`, `@react-navigation/bottom-tabs`, `@react-navigation/stack`
-- Créer la structure de dossiers `src/` complète (voir CLAUDE.md)
-- Créer `AppNavigator.tsx` avec 5 onglets placeholder (Dashboard, Documents, Clients, Produits, Paramètres)
-- Configurer ESLint + Prettier
-- Vérification : `npx expo start` → app visible dans Expo Go
-
-Livrable : app qui se lance avec 5 onglets vides.
-
----
-
-### Jour 2 — Dépendances principales [#2]
-
-**Objectif :** Toutes les bibliothèques installées et configurées.
-
-Packages à installer :
 ```bash
-npm install zustand @react-native-async-storage/async-storage
-npm install react-hook-form @hookform/resolvers zod
-npm install i18next react-i18next expo-localization
-npm install expo-print expo-sharing expo-file-system
-npm install react-native-google-mobile-ads
-npm install expo-in-app-purchases
-npm install @react-native-community/datetimepicker
-npm install react-native-pdf
+npx create-expo-app facturo --template expo-template-blank-typescript
 ```
 
-Tâches :
-- Initialiser i18n (`src/i18n/index.ts`, `en.json`, `fr.json` avec namespace structure)
-- Configurer AdMob (test mode) dans `app.json`
-- Vérifier les peer dependencies
-- Corriger les éventuels conflits de versions
+- `tsconfig.json` : `strict: true`, alias de chemin `@/` → `src/`
+- Installer React Navigation v6 : native, bottom-tabs, stack
+- `AppNavigator.tsx` : 5 onglets placeholder (Dashboard, Documents, Clients, Produits, Paramètres)
+- ESLint + Prettier configurés
+- ✅ Vérification : `npx expo start` → app visible, 5 onglets
 
-Livrable : build Android sans erreurs.
+### Jour 2 — Toutes les dépendances [#2]
 
----
+```bash
+# Base de données
+npm install expo-sqlite drizzle-orm
+npm install -D drizzle-kit
+
+# UI & Navigation
+npm install @react-navigation/native @react-navigation/bottom-tabs @react-navigation/stack
+npm install react-native-screens react-native-safe-area-context
+
+# Formulaires
+npm install react-hook-form @hookform/resolvers zod
+
+# PDF
+npm install @react-pdf/renderer
+
+# i18n
+npm install i18next react-i18next expo-localization
+
+# Partage & Fichiers
+npm install expo-sharing expo-file-system expo-print
+
+# Notifications
+npm install expo-notifications
+
+# Monétisation
+npm install react-native-google-mobile-ads
+npm install expo-in-app-purchases
+
+# Utilitaires
+npm install @react-native-community/datetimepicker
+npm install react-native-pdf
+npm install nanoid
+```
+
+- `drizzle.config.ts` : pointé vers `src/db/schema.ts`
+- `app.config.js` : config dynamique pour les variables d'environnement
+- ✅ Vérification : build Android sans erreur
 
 ### Jour 3 — EAS Build + Design System [#3, #26]
 
-**Objectif :** Build Android signé en place, tokens de design définis.
+**EAS :**
+```bash
+npm install -g eas-cli && eas login && eas init
+```
+- `eas.json` : profiles development / preview / production
+- Keystore Android généré via EAS
 
-Tâches :
-- `npm install -g eas-cli && eas init`
-- Configurer `eas.json` (profiles: development, preview, production)
-- Générer keystore Android via EAS
-- Créer `src/theme/colors.ts` — palette principale (primary, secondary, surface, error, warning, success)
-- Créer `src/theme/typography.ts` — fontSizes (xs/sm/md/lg/xl/2xl), fontWeights
-- Créer `src/theme/spacing.ts` — scale 4px (4, 8, 12, 16, 20, 24, 32, 40, 48)
-- Créer composants de base : `Button`, `Input`, `Card`, `Badge`, `Divider`, `EmptyState`
-- Icônes : `@expo/vector-icons` (Ionicons)
+**Design System (`src/theme/`) :**
+```typescript
+// colors.ts
+export const colors = {
+  primary:    '#2563EB', // bleu professionnel
+  primaryDark:'#1D4ED8',
+  secondary:  '#10B981', // vert succès
+  error:      '#EF4444',
+  warning:    '#F59E0B',
+  surface:    '#FFFFFF',
+  background: '#F8FAFC',
+  textPrimary:'#1E293B',
+  textSecondary:'#64748B',
+  border:     '#E2E8F0',
+  // Statuts documents
+  statusDraft:    '#94A3B8',
+  statusSent:     '#3B82F6',
+  statusPaid:     '#10B981',
+  statusOverdue:  '#EF4444',
+  statusConverted:'#8B5CF6',
+}
+```
 
-Livrable : `eas build --platform android --profile preview` réussit.
+- `typography.ts` : fontSizes xs(10)/sm(12)/md(14)/lg(16)/xl(18)/2xl(24)/3xl(32)
+- `spacing.ts` : multiples de 4 → 4/8/12/16/20/24/32/40/48/64
+- Composants de base : `Button`, `Input`, `Card`, `Badge`, `Divider`, `EmptyState`, `LoadingSpinner`
+- Icônes : `@expo/vector-icons` Ionicons
 
----
-
-## Phase 2 — Couche Données (J4–J6)
-
-### Jour 4 — Types TypeScript [#4]
-
-**Objectif :** Tous les modèles de données typés et documentés.
-
-Fichiers à créer :
-- `src/types/document.types.ts` — `Document`, `LineItem`, `Discount`, `TaxLine`, `DocumentType`, `DocumentStatus`
-- `src/types/client.types.ts` — `Client`, `ClientSnapshot`, `Address`
-- `src/types/product.types.ts` — `Product`
-- `src/types/settings.types.ts` — `CompanySettings`, `TaxRate`
-- `src/types/currency.types.ts` — `CurrencyConfig` + liste complète des 150+ devises ISO 4217
-- `src/utils/calculations.ts` — fonctions `calculateLineItem`, `calculateDocument` (pures, testables)
-- `src/utils/currency.ts` — `formatCurrency(amount, config)`, `getCurrencyConfig(code)`, `SUPPORTED_CURRENCIES`
-- `src/utils/invoiceNumber.ts` — `generateInvoiceNumber(prefix, year, counter)`
-
-Tests unitaires :
-- `calculations.test.ts` : cas TVA 20%, remise %, remise fixe, multi-taxes
-- `currency.test.ts` : formatage EUR, XAF (0 décimales), USD
-
-Livrable : 0 erreur TypeScript, tests verts.
-
----
-
-### Jour 5 — Stores Zustand [#5]
-
-**Objectif :** Toute la logique d'état encapsulée et persistée.
-
-Fichiers à créer :
-- `src/store/clientsStore.ts` — CRUD clients + search
-- `src/store/productsStore.ts` — CRUD produits + search
-- `src/store/documentsStore.ts` — CRUD documents + filtres + `convertQuoteToInvoice()`
-- `src/store/settingsStore.ts` — CompanySettings + TaxRates + compteurs numérotation
-- `src/store/usageStore.ts` — compteur PDF/mois + reset mensuel + état isPro
-
-Chaque store :
-- Middleware `persist` avec AsyncStorage
-- Types stricts, pas de `any`
-- Actions testables en isolation
-
-Livrable : stores fonctionnels, données persistées entre relancements.
+✅ `eas build --platform android --profile preview` réussit.
 
 ---
 
-### Jour 6 — Données de démo + utilitaires [bonus]
+## Phase 2 — Base de Données SQLite (J4–J7)
 
-**Objectif :** App utilisable immédiatement au premier lancement.
+### Jour 4 — Schéma Drizzle [#35 — nouvelle issue]
 
-Tâches :
-- `src/utils/seedData.ts` — données exemples (2 clients, 3 produits, 1 devis, 1 facture)
-- Injecter au premier lancement (flag `hasSeeded` dans settingsStore)
-- `src/utils/dateUtils.ts` — formatDate, addDays, isOverdue, startOfMonth
-- Compléter les fichiers i18n `en.json` et `fr.json` pour les namespaces : `common`, `document`, `client`, `product`, `settings`, `pdf`
+- Créer `src/db/schema.ts` : tables complètes (voir CLAUDE.md)
+  - `clients`, `products`, `tax_rates`, `documents`, `document_items`, `company_settings`, `app_usage`
+- Créer `src/db/client.ts` :
+  ```typescript
+  import { drizzle } from 'drizzle-orm/expo-sqlite';
+  import { openDatabaseSync } from 'expo-sqlite';
 
----
+  const sqlite = openDatabaseSync('facturo.db');
+  export const db = drizzle(sqlite, { schema });
+  ```
+- `src/db/migrations/` : générer la migration initiale via `npx drizzle-kit generate`
+- `src/db/client.ts` : `runMigrations()` appelé au démarrage de l'app
+- ✅ Vérification : app démarre, DB créée, aucune erreur migration
 
-## Phase 3 — CRUD Screens (J7–J13)
+### Jour 5 — Repository Clients & Produits [#36 — nouvelle issue]
 
-### Jour 7–8 — Gestion des Clients [#9]
+`src/repositories/ClientRepository.ts` :
+```typescript
+export class ClientRepository {
+  async findAll(search?: string): Promise<Client[]>
+  async findById(id: string): Promise<Client | null>
+  async create(data: NewClient): Promise<Client>
+  async update(id: string, data: Partial<NewClient>): Promise<Client>
+  async delete(id: string): Promise<void>
+  async findWithDocumentCount(): Promise<(Client & { documentCount: number })[]>
+}
+```
 
-**Objectif :** Créer, modifier, supprimer, rechercher des clients.
+`src/repositories/ProductRepository.ts` — même pattern.
 
-Écrans :
-- `ClientListScreen` : liste avec `FlatList`, barre de recherche, bouton FAB « + »
-- `ClientFormScreen` : formulaire react-hook-form + Zod
-  - Champs : nom, type (individuel/entreprise), email, téléphone, adresse, pays (picker), n° fiscal, RCCM/SIRET
-  - Validation : email format, téléphone optionnel, nom requis
-  - Mode création et édition
-- Confirmation de suppression via modal
+✅ Tests : créer/lire/modifier/supprimer client → persisté entre redémarrages.
 
-Composants à extraire :
-- `CountryPicker` — picker ISO 3166 avec recherche
-- `ClientCard` — card avec nom, email, dernière activité
+### Jour 6 — Repository Documents [#36]
 
-Livrable : flux complet créer/modifier/supprimer/rechercher client.
+`src/repositories/DocumentRepository.ts` :
+```typescript
+async findAll(filters: {
+  type?: 'quote' | 'invoice';
+  status?: DocumentStatus;
+  clientId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  search?: string;
+}): Promise<Document[]>
 
----
+async findWithItems(id: string): Promise<DocumentWithItems | null>
+async create(data: CreateDocumentInput): Promise<DocumentWithItems>
+async update(id: string, data: UpdateDocumentInput): Promise<DocumentWithItems>
+async delete(id: string): Promise<void>
 
-### Jour 9–10 — Gestion des Produits/Services [#10]
+async convertQuoteToInvoice(quoteId: string): Promise<Document>
+// → Transaction SQLite : crée la facture + met à jour le devis atomiquement
 
-**Objectif :** Catalogue produits réutilisable dans les documents.
+async duplicate(id: string): Promise<Document>
+async getStats(): Promise<{ totalRevenue, paidRevenue, pendingCount, overdueCount }>
+```
 
-Écrans :
-- `ProductListScreen` : liste avec recherche, catégories
-- `ProductFormScreen` : désignation, description, prix unitaire, unité (picker : h, kg, pcs, jour, forfait, etc.), catégorie optionnelle
+✅ Test critique : conversion devis→facture en transaction (simuler une interruption → vérifier rollback).
 
-Composants :
-- `UnitPicker` — liste d'unités prédéfinies + saisie libre
-- `ProductCard`
+### Jour 7 — Repository Paramètres + Seed Data
 
-Livrable : catalogue gérable, prêt à être utilisé dans l'éditeur.
+`src/repositories/SettingsRepository.ts` :
+- `getCompanySettings()` / `updateCompanySettings()` — ligne singleton
+- `getTaxRates()` / `createTaxRate()` / `updateTaxRate()` / `deleteTaxRate()`
+- `getUsage()` / `incrementPdfCount()` / `checkAndResetMonthly()` / `setPro()`
 
----
-
-### Jour 11–13 — Paramètres & Profil Entreprise [#11]
-
-**Objectif :** Configuration complète de l'entreprise et des défauts.
-
-Écrans :
-- `SettingsScreen` : menu principal (Profil entreprise, Taux de TVA, Devises, Sauvegarde, Upgrade Pro)
-- `CompanyProfileScreen` :
-  - Logo (picker galerie + aperçu)
-  - Nom, adresse, téléphone, email, site web
-  - N° fiscal, n° d'immatriculation
-  - Devise par défaut (recherche parmi 150+ ISO 4217)
-  - Langue par défaut (FR/EN)
-  - Préfixe et numéro de départ : factures et devis
-  - Délai de paiement par défaut (jours)
-  - Mentions légales
-  - Coordonnées bancaires
-- `TaxRatesScreen` : liste des taux configurés + CRUD
-  - Nom libre, taux %, défaut oui/non, composé oui/non
-
-Livrable : paramètres complets, persistés, appliqués par défaut dans les nouveaux documents.
-
----
-
-## Phase 4 — Éditeur de Documents (J14–J18)
-
-### Jour 14–16 — DocumentEditorScreen [#7]
-
-**Objectif :** Cœur de l'application — créer/modifier un devis ou une facture.
-
-Sections de l'écran :
-1. **En-tête** : type (devis/facture), numéro (auto + éditable), date, date d'échéance
-2. **Client** : `ClientPicker` (autocomplétion + création rapide inline)
-3. **Lignes** : `FlatList` de `LineItemRow`
-   - Description, quantité, prix unitaire, unité
-   - Remise par ligne (% ou fixe)
-   - Taux de TVA applicables (multi-select depuis les taux configurés)
-   - Totaux calculés en temps réel
-   - Bouton supprimer ligne
-   - Bouton « Ajouter depuis catalogue » (ProductPicker)
-4. **Résumé financier** :
-   - Sous-total
-   - Remise globale (% ou fixe)
-   - Lignes de taxes (regroupées par taux)
-   - **TOTAL** (large)
-5. **Pied** : notes, conditions, langue du PDF, devise du document
-6. **Actions** : Aperçu PDF, Enregistrer, Envoyer
-
-Auto-save brouillon toutes les 10 secondes.
-
-Composants à créer :
-- `LineItemRow` — ligne éditable avec swipe pour supprimer
-- `ClientPicker` — modal de recherche avec création inline
-- `ProductPicker` — modal catalogue
-- `TaxRateSelector` — multi-select des taux
-- `DiscountInput` — toggle % / fixe + valeur
-- `CurrencySelector` — picker devise avec recherche
-- `FinancialSummary` — bloc récapitulatif recalculé en temps réel
-
-Livrable : création d'une facture complète avec calculs corrects.
+`src/db/seed.ts` :
+- 2 clients, 3 produits, 1 devis, 1 facture avec lignes
+- Déclenché au premier lancement si `hasSeenOnboarding === false`
+- Données en EUR et XAF pour couvrir les deux contextes
 
 ---
 
-### Jour 17–18 — Conversion Devis → Facture + Duplication [#14]
+## Phase 3 — Utilitaires & Calculs (J8–J9)
 
-**Objectif :** Actions documents avancées.
+### Jour 8 — Moteur de calcul + Devises [#32, #33]
 
-Fonctionnalités :
-- **Duplication** : copie exacte du document, nouveau numéro, statut brouillon
-- **Conversion devis → facture** :
-  1. Confirmation utilisateur (modal)
-  2. Nouvel ID, type='invoice', statut='draft'
-  3. Nouveau numéro (séquence factures)
-  4. Date = aujourd'hui, échéance = aujourd'hui + délai par défaut
-  5. Copie de tous les items, client snapshot, devise, taxes
-  6. `convertedFromId` sur la nouvelle facture
-  7. `convertedToId` + statut='converted' sur le devis original
-- Indicateur visuel "Converti le {date}" sur le devis source
-- Lien vers la facture créée depuis le devis
+**`src/utils/calculations.ts`** — fonctions pures, testées :
+```typescript
+export function calculateLineItem(item, taxRates): LineItemTotals
+export function calculateDocument(items, globalDiscount, taxRates): DocumentTotals
+// Résultat : { subtotal, discountAmount, taxableAmount, taxLines, taxTotal, total }
+```
 
-Livrable : conversion fonctionnelle, audit trail préservé.
+**`src/utils/currency.ts`** :
+```typescript
+export const CURRENCIES: Record<string, CurrencyConfig> = {
+  EUR: { code:'EUR', name:'Euro', symbol:'€', symbolPosition:'after',
+         decimalDigits:2, thousandsSep:'.', decimalSep:',' },
+  USD: { code:'USD', name:'US Dollar', symbol:'$', symbolPosition:'before',
+         decimalDigits:2, thousandsSep:',', decimalSep:'.' },
+  XAF: { code:'XAF', name:'Franc CFA BEAC', symbol:'FCFA', symbolPosition:'after',
+         decimalDigits:0, thousandsSep:' ', decimalSep:',' },
+  // ... 150+ devises ISO 4217
+};
+
+export function formatCurrency(amount: number, config: CurrencyConfig): string
+export function getCurrencyConfig(code: string): CurrencyConfig
+export function searchCurrencies(query: string): CurrencyConfig[]
+```
+
+**`src/utils/documentNumber.ts`** :
+```typescript
+export function generateDocumentNumber(prefix: string, year: number, counter: number): string
+// → 'FAC-2026-001'
+```
+
+**Tests (Jest) :**
+- TVA 20% sur 1000 → sous-total 1000, TVA 200, total 1200
+- Remise 10% puis TVA 20% → base 900, TVA 180, total 1080
+- Remise fixe 50€ + TVA 19.25% → calcul exact
+- formatCurrency(1500000, XAF) → '1 500 000 FCFA'
+- formatCurrency(1234.56, EUR) → '1.234,56 €'
+
+### Jour 9 — i18n [#31]
+
+`src/i18n/index.ts` :
+```typescript
+i18n.use(initReactI18next).init({
+  lng: Localization.locale.split('-')[0],
+  fallbackLng: 'en',
+  resources: { fr: { ...frTranslations }, en: { ...enTranslations } },
+  interpolation: { escapeValue: false },
+});
+```
+
+Structure des fichiers `en.json` / `fr.json` — remplir tous les namespaces :
+- `common`, `document`, `client`, `product`, `settings`
+- `pdf` (labels PDF uniquement — utilisés dans le template)
+- `monetization` (ad-gate, upgrade)
+- `onboarding`
+
+Règle : une clé manquante en développement = warning visible en console. Configurer `missingKeyHandler`.
 
 ---
 
-## Phase 5 — Liste, Dashboard, Onboarding (J19–J21)
+## Phase 4 — CRUD Screens (J10–J16)
 
-### Jour 19 — DocumentListScreen [#8]
+### Jours 10–11 — ClientListScreen + ClientFormScreen [#9]
 
-**Objectif :** Vue globale de tous les documents avec filtres et actions rapides.
+**ClientListScreen :**
+- `FlatList` des clients via `ClientRepository.findAll(search)`
+- Barre de recherche (debounce 300ms)
+- `ClientCard` : nom, email, pays, nombre de documents
+- Swipe gauche : Supprimer (avec confirmation)
+- Swipe droite : Modifier
+- FAB "+" → ClientFormScreen (création)
+- État vide : `EmptyState` avec illustration et CTA
 
-Fonctionnalités :
-- Onglets : Tous / Devis / Factures
-- Filtres : statut, plage de dates, client
+**ClientFormScreen :**
+```
+Formulaire react-hook-form + Zod :
+  - Type (individuel / entreprise) — toggle
+  - Nom * (requis)
+  - Email (format email)
+  - Téléphone
+  - Adresse (ligne 1, ligne 2, ville, code postal)
+  - Pays (CountryPicker — ISO 3166, avec recherche)
+  - N° fiscal (NIF, NIU, TVA — label selon pays)
+  - N° d'immatriculation (RCCM, SIRET — label selon pays)
+  - Devise préférée (CurrencySelector)
+  - Notes
+```
+
+Composant `CountryPicker` : FlatList de pays triés + recherche.
+
+### Jours 12–13 — ProductListScreen + ProductFormScreen [#10]
+
+**ProductListScreen :** même pattern que clients.
+
+**ProductFormScreen :**
+```
+  - Nom * (requis)
+  - Description
+  - Prix unitaire * (requis, numérique)
+  - Unité (UnitPicker) :
+    Durée : h, jour, semaine, mois, forfait
+    Quantité : pcs, kg, g, L, m, m², m³, km
+    Saisie libre possible
+  - Catégorie (optionnel)
+```
+
+### Jours 14–16 — CompanyProfileScreen + SettingsScreen + TaxRatesScreen [#11, #34]
+
+**SettingsScreen** (menu) :
+- Profil entreprise → CompanyProfileScreen
+- Taux de TVA → TaxRatesScreen
+- Devise par défaut → CurrencySelector inline
+- Langue de l'app → FR / EN toggle
+- Sauvegarde / Restauration → BackupScreen
+- Passer à Pro → UpgradeProScreen
+- À propos, Politique de confidentialité
+
+**CompanyProfileScreen :**
+- Logo (image picker galerie + base64 pour le PDF)
+- Tous les champs company_settings
+- `CurrencySelector` — `FlatList` de 150+ devises avec recherche (code + nom)
+- Numérotation : préfixe facture/devis + compteur de départ
+
+**TaxRatesScreen :**
+- Liste des taux avec taux %, badge "Défaut"
+- FAB "+" → modal `TaxRateForm` (nom libre, taux 0–100, défaut oui/non)
+- Swipe pour supprimer
+- Au premier lancement, pré-remplir selon devise par défaut :
+  - EUR → TVA 20%, TVA 10%, TVA 5.5%
+  - XAF → TVA 19.25%, AIR 5%
+  - Autres → vide
+
+---
+
+## Phase 5 — Éditeur de Documents (J17–J21)
+
+### Jours 17–19 — DocumentEditorScreen [#7]
+
+**En-tête du formulaire :**
+- Toggle Devis / Facture
+- Numéro (auto-généré, éditable)
+- Date + Date d'échéance (DatePicker)
+- Devise du document (CurrencySelector)
+- Langue du PDF (FR / EN)
+
+**Section Client :**
+- `ClientPicker` : modal avec recherche + "Créer rapidement" inline
+  - "Créer rapidement" : nom + email → crée en DB + sélectionne
+- Affiche le snapshot client sélectionné (modifiable après coup)
+
+**Lignes de document :**
+- `FlatList` de `LineItemRow`
+- Chaque ligne :
+  - Description (autocomplete depuis produits)
+  - Quantité + Unité
+  - Prix unitaire
+  - Remise par ligne (toggle % / fixe)
+  - Taux de TVA (multi-select via TaxRateSelector)
+  - Total ligne (calculé en temps réel)
+  - Bouton supprimer (swipe ou icône)
+- "Ajouter une ligne" → menu : "Depuis le catalogue" | "Ligne libre"
+- Réorganisation par drag & drop (react-native-draggable-flatlist)
+
+**Résumé financier (en temps réel) :**
+```
+Sous-total HT       : X,XX €
+Remise globale (%) : -X,XX €
+─────────────────────────────
+Base imposable      : X,XX €
+TVA 20%             : X,XX €
+TVA 5.5%            : X,XX €
+─────────────────────────────
+TOTAL TTC           : X,XX €  ← grande, gras
+```
+
+**Pied de formulaire :**
+- Notes libres
+- Conditions de paiement
+
+**Auto-save :** toutes les 10 secondes en `status='draft'`.
+
+**Barre d'actions :**
+- [Aperçu PDF] [Enregistrer] [Envoyer] (menu contextuel)
+
+### Jours 20–21 — Conversion Devis → Facture + Duplication [#14]
+
+**Conversion :**
+- Bouton accessible depuis le menu "•••" sur un devis (status ≠ 'converted')
+- Modal de confirmation avec résumé
+- `DocumentRepository.convertQuoteToInvoice(id)` — transaction atomique
+- Navigation vers la nouvelle facture
+- Indicateur sur le devis : badge violet "Converti → FAC-2026-001"
+
+**Duplication :**
+- Accessible depuis menu "•••" sur tout document
+- `DocumentRepository.duplicate(id)` — nouvelle série, date = aujourd'hui, status = draft
+
+---
+
+## Phase 6 — Liste, Dashboard, Onboarding (J22–J24)
+
+### Jour 22 — DocumentListScreen [#8]
+
+- Onglets : Tous / Devis / Factures (Bottom Tab intérieur)
+- Filtres : statut (chips), plage de dates, client (picker)
 - Recherche par numéro ou nom client
-- `DocumentCard` : numéro, client, montant formaté, statut (color-coded), date
-- Swipe actions : partager PDF, dupliquer, supprimer
-- Statuts : Brouillon (gris) / Envoyé (bleu) / Payé (vert) / En retard (rouge) / Converti (violet)
-- FAB « + » → choix Devis ou Facture
+- `DocumentCard` : numéro | client | montant formaté | statut (color-coded) | date
+- Swipe droite : Partager PDF
+- Swipe gauche : Dupliquer | Supprimer
+- FAB "+" → Nouveau document (bottom sheet : Devis ou Facture)
+- Pagination : 20 résultats par page, load more au scroll
 
-Livrable : liste filtrée, navigation vers éditeur.
+### Jour 23 — DashboardScreen [#6]
 
----
+Widgets (données réelles via `DocumentRepository.getStats()`) :
+- Carte bleue : CA facturé ce mois (total)
+- Carte verte : CA encaissé ce mois (statut paid)
+- Carte rouge : Factures en retard (count + montant)
+- Carte orange : Devis en attente de réponse
+- 5 derniers documents avec statut
+- Boutons rapides : [+ Nouveau devis] [+ Nouvelle facture]
 
-### Jour 20 — DashboardScreen [#6]
+### Jour 24 — OnboardingScreen [#19]
 
-**Objectif :** Vue d'accueil avec KPIs et accès rapide.
-
-Widgets :
-- Compteurs : nombre de devis en attente, factures impayées, total encaissé ce mois
-- 5 documents récents avec statut
-- Boutons action rapide : Nouveau devis, Nouvelle facture
-- Alertes : factures en retard (badge rouge)
-
-Livrable : dashboard fonctionnel avec données réelles des stores.
-
----
-
-### Jour 21 — OnboardingScreen [#19]
-
-**Objectif :** Première expérience utilisateur guidée.
-
-Fonctionnalités :
-- 3 slides (Swiper) : présentation fonctionnalités clés
-- Slide finale : mini-formulaire pour remplir le nom de l'entreprise et la devise par défaut
-- Bouton « Commencer » → naviguer vers Dashboard
-- Flag `hasSeenOnboarding` en AsyncStorage — ne s'affiche qu'une fois
-- Bouton « Passer » disponible
-
-Livrable : onboarding complet, skip possible.
+- 3 slides (Swiper animé) :
+  1. "Créez des factures professionnelles en 2 minutes"
+  2. "Partagez vos PDFs via WhatsApp, Gmail, n'importe où"
+  3. "Vos données restent sur votre téléphone — 100% privé"
+- Slide 4 (setup) :
+  - Nom de l'entreprise *
+  - Devise par défaut (CurrencySelector)
+  - Langue (FR / EN)
+  - [Commencer] → seed data → Dashboard
+- Bouton "Passer" disponible dès slide 1
 
 ---
 
-## Phase 6 — Moteur PDF (J22–J26)
+## Phase 7 — Moteur PDF (J25–J30)
 
-### Jour 22–24 — Générateur PDF [#12]
+### Jours 25–27 — Template PDF @react-pdf/renderer [#12]
 
-**Objectif :** PDF professionnel généré depuis les données du document.
+**`src/services/pdf/PdfTemplate.tsx`** — composants JSX → PDF :
 
-Fichiers :
-- `src/services/pdf/pdfTemplate.ts` — fonction pure `buildPdfHtml(doc, company, t)` → HTML string
-- `src/services/pdf/pdfGenerator.ts` — `generatePdf(html)` → file URI via expo-print
-
-Structure HTML du PDF :
 ```
-Header:
-  Logo entreprise (base64) | Informations entreprise
-  Titre "FACTURE" ou "DEVIS" (selon type)
-  Numéro, Date, Échéance
-
-Client:
-  Bloc "Facturé à" avec snapshot client
-
-Tableau des lignes:
-  Colonnes : Description | Qté | Unité | P.U. | Remise | Total HT
-  Total par ligne
-
-Résumé financier:
-  Sous-total HT
-  Remise globale (si applicable)
-  Lignes de taxes
-  TOTAL TTC (large, gras)
-
-Pied de page:
-  Mentions légales | Coordonnées bancaires
-  RCCM, NIU, n° fiscal (si renseignés)
-  Page X / Y
-
-Filigrane:
-  "BROUILLON" / "DRAFT" en diagonale si statut = draft
+Page A4 :
+┌─────────────────────────────────────────┐
+│ [Logo]  Nom entreprise                  │
+│         Adresse | Tél | Email           │
+│                          FACTURE        │
+│                          N° FAC-2026-001│
+│                          Date: 11/06/26 │
+│                          Échéance: ...  │
+├─────────────────────────────────────────┤
+│ FACTURÉ À :                             │
+│ Nom client                              │
+│ Adresse, Pays                           │
+│ N° fiscal                               │
+├─────────────────────────────────────────┤
+│ Description | Qté | U | P.U. | % | HT  │
+│ ─────────────────────────────────────── │
+│ Ligne 1 ...                             │
+│ Ligne 2 ...                             │
+├─────────────────────────────────────────┤
+│                    Sous-total HT : xxx  │
+│                    Remise -10% : -xxx   │
+│                    Base HT : xxx        │
+│                    TVA 20% : xxx        │
+│                    TOTAL TTC : xxx      │
+├─────────────────────────────────────────┤
+│ Notes / Conditions                      │
+├─────────────────────────────────────────┤
+│ Mentions légales | RIB                  │
+│ RCCM, NIU, N° fiscal (si renseignés)   │
+│ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─│
+│ [version gratuite] Créé avec Facturo   │ ← viral footer
+└─────────────────────────────────────────┘
 ```
 
-Internationalisation du PDF :
-- Labels en FR ou EN selon `document.language`
-- Format de date selon la langue
-- Formatage monétaire selon `document.currency`
+- Filigrane diagonal "BROUILLON" / "DRAFT" si status = draft
+- Labels PDF en FR ou EN selon `document.language`
+- Formatage monétaire selon `document.currency*` — 0 décimale pour XAF, 2 pour EUR
+- Logo en base64 (stocké en DB dans `companySettings.logoUri`)
 
-Livrable : PDF propre sur device Android, testé avec logo et sans logo.
+**Test obligatoire** sur device Android réel : vérifier rendu avec/sans logo, avec/sans filigrane.
 
----
+### Jour 28 — PDFPreviewScreen + Partage [#13]
 
-### Jour 25 — PDFPreviewScreen + Partage [#13]
-
-**Objectif :** Prévisualiser et distribuer le PDF.
-
-Fonctionnalités :
-- `PDFPreviewScreen` : rendu inline via `react-native-pdf` ou WebView
-- Bouton Partager → `expo-sharing` → WhatsApp, Gmail, Telegram, etc.
-- Bouton Télécharger → copie dans Documents de l'appareil
+- `PDFPreviewScreen` : rendu `react-native-pdf` ou WebView
+- Bouton Partager → `expo-sharing` → WhatsApp / Gmail / Telegram...
+- Bouton Télécharger → `expo-file-system` → dossier Documents
 - Bouton Imprimer → `expo-print.printAsync`
-- Bouton Retour vers édition
+- Bouton ← → retour à l'édition
 
-Livrable : flux complet génération → prévisualisation → partage.
+### Jours 29–30 — Intégration Ad-Gate dans le flux PDF [#16]
 
----
+**`src/services/monetization/AdGate.ts`** :
+```typescript
+export async function requestPdfGeneration(
+  onGenerate: () => Promise<void>
+): Promise<void> {
+  const usage = await SettingsRepository.getUsage();
 
-### Jour 26 — Intégration Ad-Gate dans le flux PDF [#16]
+  if (usage.isPro || usage.pdfCountThisMonth < FREE_PDF_LIMIT) {
+    await onGenerate();
+    await SettingsRepository.incrementPdfCount();
+    return;
+  }
 
-**Objectif :** Brancher la monétisation sur la génération PDF.
-
-Logique :
+  // Afficher AdGateModal
+  showAdGateModal({
+    currentCount: usage.pdfCountThisMonth,
+    limit: FREE_PDF_LIMIT,
+    onWatchAd: async () => {
+      const success = await AdService.showRewardedAd();
+      // success = false si pub non disponible → bypass quand même
+      await onGenerate();
+      await SettingsRepository.incrementPdfCount();
+    },
+    onUpgrade: () => navigate('UpgradePro'),
+  });
+}
 ```
-generateAndSharePdf(document):
-  1. usageStore.canGeneratePdfDirectly()
-     → true: générer directement
-     → false: afficher AdGateModal
-        ├── "Regarder une pub (30 sec)" → loadRewardedAd() → show() → onAdClose → générer
-        └── "Passer à Pro" → navigate UpgradeProScreen
 
-  2. Si génération OK: usageStore.incrementPdfCount()
+**`AdGateModal`** :
+- Compteur visible : "7/10 PDFs utilisés ce mois"
+- Bouton principal : "Regarder une pub (30 sec)" — primaire, visuellement dominant
+- Bouton secondaire : "Passer à Pro — voir les avantages"
+- Si aucune pub disponible → afficher "Générer quand même" (bypass gracieux)
+
+---
+
+## Phase 8 — Monétisation (J31–J35)
+
+### Jour 31 — AdMob (Rewarded + Banner) [#15]
+
+**`src/services/monetization/AdService.ts`** :
+- Initialiser AdMob au démarrage
+- `loadRewardedAd()` — précharger dès l'ouverture de l'app (pas quand on en a besoin)
+- `showRewardedAd()` → Promise\<boolean> (true = regardé, false = échec/skip)
+- Composant `AdBanner` : banner 320×50 en bas de `DocumentListScreen` seulement
+  - `{!isPro && <AdBanner />}`
+
+IDs de test en développement :
+```
+Rewarded : ca-app-pub-3940256099942544/5224354917
+Banner :   ca-app-pub-3940256099942544/6300978111
 ```
 
-Composants :
-- `AdGateModal` — modal avec compteur mensuel visible, 2 options
-- `usageStore.canGeneratePdfDirectly()` — compare compteur vs limite
-- `usageStore.incrementPdfCount()` — +1 avec reset mensuel automatique
+### Jours 32–33 — In-App Purchase [#17]
 
-Livrable : ad-gate fonctionnel, jamais bloquant.
+Produits Google Play Console :
+- `facturo_pro_onetime` : achat unique (3,99€ — à tester avec tarif local)
+- `facturo_pro_monthly` : abonnement 1,49€/mois
 
----
+**`src/services/monetization/IapService.ts`** :
+- `initIAP()` — connexion store au démarrage
+- `getProducts()` — récupère prix actuels depuis Play Store
+- `purchasePro(productId)` — lance l'achat natif
+- `verifyAndActivate(purchase)` — vérifie receipt + `SettingsRepository.setPro(true)`
+- `restorePurchases()` — obligatoire Android
 
-## Phase 7 — Monétisation (J27–J31)
+### Jours 34–35 — UpgradeProScreen [#18]
 
-### Jour 27 — AdMob — Pubs Rewarded + Banner [#15]
+Avantages Pro affichés :
+- ✅ PDFs illimités sans publicité
+- ✅ Suppression du branding "Créé avec Facturo" dans les PDFs
+- ✅ Toutes les fonctionnalités futures Pro en priorité
+- ✅ Support prioritaire
 
-**Objectif :** Publicités intégrées proprement.
-
-Implémentation :
-- `src/services/monetization/adService.ts`
-  - `loadRewardedAd()` — précharge la pub au démarrage de l'app
-  - `showRewardedAd()` → Promise résolu quand l'utilisateur a regardé 30 secondes
-  - `loadBannerAd()` — pour DocumentListScreen (free only)
-- Composant `AdBanner` — banner 320x50 en bas de liste (si !isPro)
-- AdMob test IDs pour le développement
-- Gestion des cas : pub non chargée → bypass automatique (ne jamais bloquer)
-
-Livrable : pubs affichées en mode test, rewarded complète débloque l'action.
-
----
-
-### Jour 28–29 — In-App Purchase (Pro) [#17]
-
-**Objectif :** Achat Pro fonctionnel via Google Play Billing.
-
-Produits à configurer dans Google Play Console :
-- `facturo_pro_onetime` — achat unique (prix cible: 3,99€)
-- `facturo_pro_monthly` — abonnement mensuel (1,49€/mois)
-
-Implémentation :
-- `src/services/monetization/iapService.ts`
-  - `initIAP()` — connexion au store
-  - `getProducts()` — récupère les offres actuelles
-  - `purchasePro()` — lance l'achat
-  - `restorePurchases()` — restauration (obligatoire sur iOS, best practice Android)
-  - `verifyPurchase()` — vérification côté client (Google receipt)
-- `usageStore.setPro(true)` après achat vérifié
-
-Livrable : achat test via Google Play sandbox.
-
----
-
-### Jour 30–31 — UpgradeProScreen [#18]
-
-**Objectif :** Écran de conversion attractif.
-
-Contenu :
-- Titre et headline persuasif
-- Liste des avantages Pro (sans pub, PDF illimités, logo custom, templates, support)
-- Affichage du prix récupéré depuis Google Play (dynamique)
-- Bouton principal : "Passer à Pro — {prix}"
-- Bouton secondaire : "Abonnement mensuel — {prix}/mois"
-- Bouton tertiaire : "Restaurer mes achats"
-- Indicateur de quota actuel (X/10 PDFs utilisés ce mois)
+Layout :
+- Prix récupérés dynamiquement depuis Google Play (pas en dur)
+- Bouton "Achat unique — X,XX€" (dominant)
+- Bouton "Abonnement — X,XX€/mois"
+- Lien "Restaurer mes achats"
+- Mention : "Aucun compte requis. Paiement sécurisé via Google Play."
 
 Déclenchement :
-- Bouton dans SettingsScreen
-- Depuis AdGateModal (call-to-action secondaire)
-- Automatiquement quand la limite est atteinte (si pas de connexion pub)
+- Menu Paramètres
+- Bouton secondaire dans AdGateModal
+- Badge "Passer à Pro" sur DashboardScreen (subtil, non intrusif)
 
 ---
 
-## Phase 8 — Fonctions Avancées (J32–J35)
+## Phase 9 — Fonctions Avancées (J36–J38)
 
-### Jour 32–33 — Statistiques [#25]
+### Jour 36 — Statistiques [#25]
 
-**Objectif :** Tableau de bord analytique simple.
-
-Métriques :
-- Chiffre d'affaires facturé (total) vs encaissé (payé)
-- Nombre de devis / factures par statut
+Métriques depuis `DocumentRepository.getStats()` :
+- CA facturé vs encaissé (barres par mois, 6 derniers mois)
+- Répartition statuts (camembert)
 - Top 5 clients par CA
-- Évolution mensuelle (12 derniers mois) — graphique barres
-- Taux de conversion devis → factures
+- Taux conversion devis → factures
 
-Bibliothèque : `react-native-chart-kit` ou `victory-native`
+Bibliothèque : `victory-native` (légère, compatible Expo)
 
----
+### Jour 37 — Sauvegarde / Restauration [#24]
 
-### Jour 34 — Sauvegarde / Restauration [#24]
-
-**Objectif :** Export complet des données en JSON.
-
-Fonctionnalités :
-- Export : sérialiser tous les stores → JSON → `expo-sharing`
-- Import : sélectionner fichier → valider structure → merge ou remplacer
-- Avertissement avant import : "Cette opération remplace vos données actuelles"
-- Format fichier : `facturo-backup-{date}.json`
-
----
-
-### Jour 35 — Notifications locales [#29]
-
-**Objectif :** Rappels pour les échéances de paiement.
-
-Implémentation :
-- `expo-notifications`
-- Planifier une notification J-3 et J0 pour chaque facture avec date d'échéance
-- Re-planifier quand une facture est marquée payée (annuler les notifs)
-- Paramètre dans Settings : activer/désactiver les rappels
-- Naviguer vers la facture concernée depuis la notification
-
----
-
-## Phase 9 — Store & CI/CD (J36–J40)
-
-### Jour 36 — GitHub Actions + EAS Build Auto [#22, #23]
-
-**Objectif :** Pipeline CI/CD complet.
-
-Fichier `.github/workflows/eas-build.yml` :
-```yaml
-Triggers:
-  - push sur main → build preview
-  - tag v*.*.* → build production
-  
-Steps:
-  1. Setup Node 18
-  2. npm ci
-  3. eas build --platform android --non-interactive
-  4. Notify on success/failure
+**Export :**
+```typescript
+const backup = {
+  version: '1.0',
+  exportedAt: new Date().toISOString(),
+  data: { clients, products, documents, documentItems, taxRates, companySettings }
+};
+// → JSON → expo-sharing → "facturo-backup-2026-06-11.json"
 ```
 
-Secrets GitHub à configurer (#23) :
-- `EXPO_TOKEN`
-- `ADMOB_APP_ID_ANDROID`
-- `IAP_PRODUCT_ID_ONETIME`
-- `IAP_PRODUCT_ID_MONTHLY`
+**Import :**
+- `expo-document-picker` → sélectionner le fichier `.json`
+- Valider le format (version, présence des tables)
+- Modal de confirmation : "Ceci remplacera toutes vos données actuelles"
+- Restaurer en transaction SQLite (effacer + réinsérer)
+
+### Jour 38 — Notifications de Rappel [#29]
+
+- `expo-notifications` : permissions au premier lancement
+- Paramètre Settings : "Rappels d'échéances" (activé par défaut)
+- Planification : J-3 et J-0 pour chaque facture avec `dueDate` et status ≠ 'paid'
+- Annulation : quand une facture passe en `status='paid'`
+- Deep link : ouvre la facture concernée depuis la notification
 
 ---
 
-### Jour 37 — Assets Play Store + Icônes [#20]
+## Phase 10 — Store, CI/CD, Lancement (J39–J42)
 
-**Objectif :** App prête visuellement pour le store.
+### Jour 39 — GitHub Actions + EAS Build [#22, #23]
 
-Tâches :
-- Icône app 1024x1024 (conforme Play Store guidelines)
+`.github/workflows/eas-build.yml` déjà en place — vérifier et tester :
+- Push sur `main` → build preview
+- Tag `v*.*.*` → build production
+- Secrets GitHub configurés (#23) : `EXPO_TOKEN`, `ADMOB_APP_ID_ANDROID`, `IAP_PRODUCT_ID_*`
+
+### Jour 40 — Assets Play Store + README [#20, #28]
+
+**Assets :**
+- Icône app 1024×1024 (fond bleu, lettre F)
 - Splash screen
-- Feature graphic 1024x500
-- 4-8 captures d'écran (2 formats : phone + tablet)
-- Rédiger le titre et la description courte/longue Play Store (FR + EN)
-- Catégorie : Finance / Business
-- `app.json` : version, bundleIdentifier, permissions justifiées
+- Feature graphic 1024×500
+- 6 screenshots phone + 2 tablet
+- Vidéo de démo 30 secondes (screen recording + voix off)
 
----
+**ASO (App Store Optimization) :**
+- Titre : "Facturo – Factures & Devis PDF"
+- Sous-titre : "Freelances, TPE, auto-entrepreneurs"
+- Description courte (80 chars) : "Créez des factures PDF en 2 minutes, partagez-les via WhatsApp"
+- Description longue : inclure les mots-clés facture / devis / invoice / PDF / TVA / freelance
 
-### Jour 38 — Politique de Confidentialité [#27]
+**README.md :** finaliser avec screenshots réels.
 
-**Objectif :** Page obligatoire pour Google Play.
+### Jour 41 — Politique de Confidentialité [#27]
 
-Contenu :
-- Données collectées : aucune (offline-first)
-- Données AdMob : mentionner Google's data practices
-- Données IAP : mentionner Google Play
+URL publique hébergée sur GitHub Pages (`/docs/privacy-policy.html`) :
+
+Contenu obligatoire :
+- Aucune donnée transmise à nos serveurs (offline-first)
+- Données AdMob : lien vers politique Google
+- Données IAP : gérées par Google Play
+- Données stockées localement sur l'appareil
 - Contact : email du développeur
-- Hébergée sur GitHub Pages ou une URL simple
 
----
+### Jour 42 — QA Final + Soumission Play Store [#30, #21]
 
-### Jour 39 — README Complet [#28]
+**Checklist QA (tous les cas) :**
 
-**Objectif :** Documentation complète pour les développeurs.
+Fonctionnel :
+- [ ] Créer devis avec 3 lignes, remise 10%, TVA 19.25% → vérifier calculs exacts
+- [ ] Convertir devis → facture → vérifier numéros, liens, snapshot préservé
+- [ ] Tenter de convertir un devis déjà converti → bouton désactivé
+- [ ] Dupliquer une facture → vérifier nouveau numéro, date, statut draft
+- [ ] Supprimer un client avec des factures → factures orphelines (clientSnapshot préservé)
+- [ ] Modifier taux TVA → anciens documents non affectés
+- [ ] Tester 5 devises (EUR, USD, XAF, JPY, GBP) → formatage correct dans PDF
 
-Sections :
-- Description et features
-- Screenshots
-- Getting started (prérequis, install, run)
-- Structure du projet
-- Architecture decisions
-- Monetization model
-- Contributing guide
-- License
+Monétisation :
+- [ ] Générer 10 PDFs → le 11ème affiche AdGateModal
+- [ ] Regarder pub 30 sec → PDF généré
+- [ ] Simuler pub non disponible → bypass automatique, PDF généré
+- [ ] Bouton "Passer à Pro" → UpgradeProScreen
+- [ ] Achat Pro en sandbox → plus d'AdGate, pied de page supprimé
+- [ ] Restaurer achat → Pro réactivé
 
----
+Data :
+- [ ] Exporter backup → fichier JSON valide
+- [ ] Importer backup → données restaurées intégralement
+- [ ] Désinstaller / réinstaller → données perdues (comportement attendu sans cloud)
 
-### Jour 40 — Checklist QA + Soumission [#30, #21]
+PDF :
+- [ ] PDF avec logo d'entreprise
+- [ ] PDF sans logo
+- [ ] PDF avec filigrane BROUILLON
+- [ ] PDF en français et en anglais
+- [ ] Partager via WhatsApp → fichier reçu lisible
+- [ ] Imprimer → mise en page A4 correcte
 
-**Objectif :** Validation finale avant publication.
+Devices :
+- [ ] Android 8.0 (API 26)
+- [ ] Android 10.0 (API 29)
+- [ ] Android 13.0 (API 33)
+- [ ] Petit écran (5") et grand écran (6.7")
 
-Checklist QA :
-- [ ] Créer un devis complet avec 3 lignes, remise, TVA → vérifier calculs
-- [ ] Convertir le devis en facture → vérifier numérotation et liens
-- [ ] Générer un PDF → vérifier rendu avec logo et sans logo
-- [ ] Partager PDF via WhatsApp
-- [ ] Atteindre la limite de PDFs → vérifier que l'ad-gate s'affiche
-- [ ] Regarder la pub 30 sec → vérifier que le PDF se génère
-- [ ] Tester l'achat Pro en sandbox → vérifier désactivation des pubs
-- [ ] Restaurer un achat
-- [ ] Exporter/importer les données (backup)
-- [ ] Tester les notifications de rappel
-- [ ] Basculer langue FR ↔ EN
-- [ ] Tester 5+ devises différentes (EUR, USD, XAF, GBP, JPY)
-- [ ] Tester sur Android 8, 10, 13
-- [ ] Vérifier les permissions dans app.json (aucune superflue)
-- [ ] ProGuard / minification activée en production
-
-Soumission Play Store (#21) :
-- `eas build --platform android --profile production`
+**Soumission :**
+```bash
+eas build --platform android --profile production
+```
 - Upload AAB dans Google Play Console
-- Remplir la fiche complète (description, screenshots, politique confidentialité)
-- Tester en Internal Testing (10 testeurs)
-- Soumettre pour review Google
+- Internal Testing : 10 testeurs minimum
+- 3 jours de test interne → soumettre review Google
 
 ---
 
-## Récapitulatif des Issues GitHub
+## Issues à créer (non encore ouvertes)
 
-| # | Titre | Phase | Jour | Priorité |
-|---|---|---|---|---|
-| #1 | Init Expo/TypeScript | 1 | J1 | 🔴 Critique |
-| #2 | Dépendances | 1 | J2 | 🔴 Critique |
-| #3 | EAS Build Android | 1 | J3 | 🔴 Critique |
-| #26 | Thème + Design System | 1 | J3 | 🟠 Haute |
-| #4 | Types TypeScript | 2 | J4 | 🔴 Critique |
-| #5 | Store Zustand | 2 | J5 | 🔴 Critique |
-| #9 | Gestion Clients | 3 | J7–J8 | 🔴 Critique |
-| #10 | Gestion Produits | 3 | J9–J10 | 🟠 Haute |
-| #11 | Paramètres + Profil | 3 | J11–J13 | 🔴 Critique |
-| #7 | Éditeur Documents | 4 | J14–J16 | 🔴 Critique |
-| #14 | Conversion Devis→Facture | 4 | J17–J18 | 🔴 Critique |
-| #8 | Liste Documents | 5 | J19 | 🔴 Critique |
-| #6 | Dashboard | 5 | J20 | 🟠 Haute |
-| #19 | Onboarding | 5 | J21 | 🟡 Normale |
-| #12 | Générateur PDF | 6 | J22–J24 | 🔴 Critique |
-| #13 | Prévisualisation + Partage | 6 | J25 | 🔴 Critique |
-| #16 | Ad-Gate (flux PDF) | 6 | J26 | 🔴 Critique |
-| #15 | AdMob Rewarded + Banner | 7 | J27 | 🟠 Haute |
-| #17 | In-App Purchase Pro | 7 | J28–J29 | 🟠 Haute |
-| #18 | Écran Upgrade Pro | 7 | J30–J31 | 🟠 Haute |
-| #25 | Statistiques | 8 | J32–J33 | 🟡 Normale |
-| #24 | Backup/Restore JSON | 8 | J34 | 🟡 Normale |
-| #29 | Notifications rappels | 8 | J35 | 🟡 Normale |
-| #22 | GitHub Actions EAS | 9 | J36 | 🟠 Haute |
-| #23 | Secrets GitHub | 9 | J36 | 🟠 Haute |
-| #20 | Fiche Play Store | 9 | J37 | 🟠 Haute |
-| #28 | README complet | 9 | J39 | 🟡 Normale |
-| #27 | Politique confidentialité | 9 | J38 | 🟠 Haute |
-| #30 | Checklist QA | 9 | J40 | 🔴 Critique |
-| #21 | Soumission Play Store | 9 | J40 | 🔴 Critique |
+| # | Titre | Phase | Priorité |
+|---|---|---|---|
+| #35 | [DB] Créer le schéma Drizzle + migration initiale | 2 | 🔴 Critical |
+| #36 | [DB] Implémenter les Repositories (pattern accès données) | 2 | 🔴 Critical |
 
 ---
 
-## Issues à créer / modifier
+## Récapitulatif — 34 Issues actives + 2 nouvelles
 
-Les issues suivantes doivent être **ajoutées ou mises à jour** sur GitHub pour refléter les décisions d'architecture :
-
-### Nouvelles issues à créer
-- **[DATA] Implémenter les calculs financiers (utils/calculations.ts)** — tests unitaires inclus
-- **[SETUP] Configurer i18n (i18next + expo-localization)** — FR + EN dès le départ
-- **[DATA] Implémenter le support multi-devises complet (150+ ISO 4217)**
-- **[UI] Écran gestion des taux de TVA (TaxRatesScreen)**
-- **[MONETISATION] Implémenter l'Ad-Gate (service + modal)** — remplace le modèle freemium bloquant
-
-### Issues à mettre à jour
-- **#16** : Modifier la description — le modèle n'est PAS un blocage. L'utilisateur regarde une pub de 30 secondes pour continuer. Jamais de blocage hard.
-- **#15** : Préciser que le banner n'apparaît QUE sur DocumentListScreen (version gratuite), et jamais sur les écrans d'édition ou PDF.
+| Priorité | Issues |
+|---|---|
+| 🔴 Critical (17) | #1 #2 #3 #4 #7 #8 #9 #12 #13 #14 #16 #21 #30 #33 #35 #36 + conversion |
+| 🟠 High (12) | #6 #10 #11 #15 #17 #18 #20 #22 #23 #26 #27 #31 #32 #34 |
+| 🟡 Normal (5) | #19 #24 #25 #28 #29 |
 
 ---
 
-## Suivi de progression
-
-Utiliser les **GitHub Projects** (Kanban) avec les colonnes :
-- `Backlog` — toutes les issues au départ
-- `In Progress` — issue en cours de développement
-- `In Review` — PR ouverte, en attente de validation
-- `Done` — issue fermée, code fusionné
-
-Labels GitHub utilisés :
-- `setup` `data` `ui` `pdf` `monetisation` `store` `ci-cd`
-- `priority:critical` `priority:high` `priority:normal`
-- `v1` `v2`
-
----
-
-*Plan établi le 2026-06-11 par Claude Code (architecte du projet).*
-*Revoir et ajuster les estimations après chaque phase terminée.*
+*Plan v2 — Révisé le 2026-06-11*  
+*Changements v2 vs v1 : AsyncStorage → SQLite/Drizzle, expo-print → @react-pdf/renderer, ajout pattern Repository, stratégie de croissance explicite*
