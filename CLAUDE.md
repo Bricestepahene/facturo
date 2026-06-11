@@ -28,7 +28,7 @@ Formulaires :    react-hook-form + Zod
 PDF :            @react-pdf/renderer (rendu JS pur, qualité professionnelle)
 i18n :           i18next + react-i18next + expo-localization
 Partage PDF :    expo-sharing + expo-file-system
-Publicités :     react-native-google-mobile-ads (AdMob)
+Publicités :     react-native-google-mobile-ads (AdMob + Mediation)
 Achats :         expo-in-app-purchases (Google Play Billing)
 Notifications :  expo-notifications
 Build :          EAS Build (Expo Application Services)
@@ -449,35 +449,90 @@ Les totaux sont calculés puis **stockés en base** à chaque sauvegarde. Un doc
 
 ---
 
-## Monétisation — Modèle Ad-Gate (Jamais de Blocage)
+## Monétisation — Stratégie Publicitaire Complète
 
+### Règle fondamentale
+Un utilisateur n'est **jamais bloqué**. Il a toujours le choix : regarder une pub ou payer Pro.
+
+### Limite gratuite
 ```
-FREE_PDF_LIMIT = 10 PDFs/mois
+FREE_PDF_LIMIT = 5 PDFs/mois   ← (pas 10)
+```
 
+PDFs 1-5 : générés directement, sans pub.  
+PDF 6 et suivants : AdGateModal obligatoire.
+
+### AdGate — Flux avant génération PDF
+```
 canGeneratePdfDirectly():
   → isPro = true           → OUI, générer directement
-  → pdfCount < LIMIT       → OUI, générer directement
-  → pdfCount >= LIMIT      → NON, afficher AdGateModal
+  → pdfCount < 5           → OUI, générer directement
+  → pdfCount >= 5          → NON, afficher AdGateModal
 
-AdGateModal:
-  ┌─ "X/10 PDFs utilisés ce mois"
+AdGateModal :
+  ┌─ "X/5 PDFs gratuits utilisés ce mois"
   ├─ [Regarder une pub — 30 sec] → showRewardedAd() → générer
-  └─ [Passer à Pro]              → UpgradeProScreen
+  └─ [Passer à Pro — sans pub]   → UpgradeProScreen
 
-Si pub non disponible (hors ligne / erreur réseau) :
-  → Bypass automatique → générer quand même
-  → Ne jamais bloquer l'utilisateur
-
-Reset mensuel :
-  → À chaque lancement : vérifier si mois courant ≠ lastResetMonth
-  → Si oui : pdfCountThisMonth = 0, lastResetMonth = 'YYYY-MM' courant
+Si pub non disponible (offline / timeout) :
+  → Bypass automatique → générer quand même (jamais bloquer)
 ```
 
-**Ce que l'on NE fait JAMAIS :**
-- Désactiver le bouton Enregistrer
-- Griser des fonctionnalités
-- Empêcher la création ou l'édition de documents
-- Bloquer si la pub ne charge pas
+### Placement des publicités — Carte complète
+
+| Écran | Format | Condition | Objectif |
+|---|---|---|---|
+| Dashboard | Banner bas | Toujours (gratuit) | Impressions constantes |
+| Dashboard | Native card "Pro" | Toujours (gratuit) | Conversion Pro |
+| DocumentListScreen | Banner bas | Toujours (gratuit) | Impressions + clics |
+| DocumentListScreen | Native ad | Entre items (1/5 docs) | CTR élevé |
+| ClientListScreen | Banner bas | Toujours (gratuit) | Impressions |
+| ProductListScreen | Banner bas | Toujours (gratuit) | Impressions |
+| SettingsScreen | Banner bas | Toujours (gratuit) | Impressions |
+| Avant PDF 6+ | Rewarded 30 sec | pdfCount >= 5 | CPV élevé |
+| Après "Marquer payée" | Interstitiel | 1 fois / facture | Moment positif = CTR élevé |
+| **DocumentEditorScreen** | **AUCUNE pub** | **Toujours** | **Ne pas perturber le travail** |
+| **PDFPreviewScreen** | **AUCUNE pub** | **Toujours** | **Ne pas perturber la satisfaction** |
+| **UpgradeProScreen** | **AUCUNE pub** | **Toujours** | **Convertir sans distraire** |
+
+### Pourquoi "Après facture payée" est le meilleur moment
+L'utilisateur vient de recevoir de l'argent. Il est satisfait, réceptif. Une pub pour Revolut Business, Stripe, ou QuickBooks a un CTR 3x supérieur à ce moment-là.
+
+### Stratégie CPM / CPC maximal — AdMob Mediation
+Ne pas utiliser AdMob seul. Connecter plusieurs réseaux en enchères temps réel :
+- **AdMob** (Google) — base
+- **Meta Audience Network** — fort sur les pros
+- **AppLovin MAX** — très bon sur Finance
+- **ironSource** — excellent sur rewarded
+
+Le plus offrant gagne chaque impression → CPM effectif +30 à +60%.
+
+### Floor Price (Prix Plancher)
+Dans AdMob : configurer un CPM minimum selon la région.
+```
+Europe :      floor = $3.00 CPM (rejette les pubs < $3)
+Afrique Nord: floor = $0.80 CPM
+Afrique sub:  floor = $0.30 CPM
+USA/Canada :  floor = $8.00 CPM
+```
+→ Rejette les pubs de mauvaise qualité, garde seulement les annonceurs premium.
+
+### Catégorie Play Store
+Déclarer l'app en catégorie **"Finance"** dans le Play Store.  
+Google cible automatiquement les annonceurs Finance (banques, SaaS comptable, paiement) qui paient 3-10× plus par clic que les annonceurs grand public.
+
+### Reset mensuel
+```
+À chaque lancement de l'app :
+  vérifier si mois courant ≠ lastResetMonth
+  si oui : pdfCountThisMonth = 0, lastResetMonth = 'YYYY-MM'
+```
+
+### Ce que l'on NE fait JAMAIS
+- Désactiver le bouton Enregistrer ou Éditer
+- Griser une fonctionnalité à cause du tier gratuit
+- Bloquer si la pub ne charge pas (toujours bypass)
+- Mettre une pub sur l'éditeur ou la prévisualisation PDF
 
 ---
 
